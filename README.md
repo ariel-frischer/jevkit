@@ -162,6 +162,7 @@ Validate a question set without touching the network.
 jev lint questions.yaml
 jev lint --json questions.yaml          # machine-readable findings
 jev lint --strict questions.yaml        # warnings fail CI (alias: --deny-warnings)
+jev lint --quiet questions.yaml         # rule ids only, no help blocks
 ```
 
 Exit codes follow a documented contract, for use in scripts and CI:
@@ -172,7 +173,9 @@ Exit codes follow a documented contract, for use in scripts and CI:
 
 `--json` prints the findings as machine-readable JSON with rule id, severity,
 message, path, and help. Text mode prints findings to stdout so piping to `jq`
-stays safe. Shell completions and a man page are behind the hidden `completions`
+stays safe. `--quiet` drops the help blocks and prints rule ids only, roughly
+cutting text output in half; useful when an agent or script consumes the ids.
+Shell completions and a man page are behind the hidden `completions`
 subcommand, generated at build time alongside the binary.
 
 ### `jev auth`
@@ -196,7 +199,8 @@ because argv is readable by other processes and lands in shell history.
 
 User defaults in `~/.config/jev/config.toml`. Keys: `provider`, `model`,
 `endpoint` (override the decisions URL, e.g. a proxy or self-hosted install),
-and `log`.
+and `log`, and `lint_verbosity` (`full` default, or `quiet` for findings with rule
+ids only; a `--quiet` flag on `ask` and `lint` overrides it).
 
 ```bash
 jev config keys     # what is configurable

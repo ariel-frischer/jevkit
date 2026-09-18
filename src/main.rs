@@ -22,6 +22,7 @@ mod usage;
 
 use anyhow::{bail, Context, Result};
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use config::LintVerbosity;
 use lint::Severity;
 use std::io::{IsTerminal, Read, Write};
 use std::path::PathBuf;
@@ -171,6 +172,11 @@ struct AskArgs {
     #[arg(long)]
     no_lint: bool,
 
+    /// Terse lint findings (rule ids only, no help blocks). Overrides the
+    /// `lint_verbosity` config key.
+    #[arg(long)]
+    quiet: bool,
+
     /// Groups related calls for observability. Never sent to the model.
     #[arg(long, value_name = "ID")]
     session_id: Option<String>,
@@ -207,6 +213,12 @@ struct LintArgs {
     /// Emit findings as JSON (rule, severity, message, path, help).
     #[arg(long)]
     json: bool,
+
+    /// Terse findings (rule ids only, no help blocks). Overrides the
+    /// `lint_verbosity` config key; `--json` is already terse, so this only
+    /// affects the human-readable output.
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(Args)]
@@ -429,6 +441,8 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
 
     if !args.no_lint {
         let findings = lint::lint_request(&request);
+        let quiet =
+            args.quiet || config::resolved_lint_verbosity(&defaults)? == LintVerbosity::Quiet;
         let errors: Vec<_> = findings
             .iter()
             .filter(|f| f.severity == Severity::Error)
@@ -440,8 +454,10 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         if !errors.is_empty() {
             for f in &errors {
                 eprintln!("error[{}]: {}: {}", f.rule, f.path, f.message);
-                if let Some(help) = &f.help {
-                    eprintln!("  help: {help}");
+                if !quiet {
+                    if let Some(help) = &f.help {
+                        eprintln!("  help: {help}");
+                    }
                 }
             }
             bail!(
@@ -562,10 +578,14 @@ fn cmd_lint(args: LintArgs) -> Result<()> {
         // Findings go to stdout: `jev lint file.yaml | jq` should see them.
         // (In `ask`, lint warnings are on stderr instead; there stdout carries
         // the model's answers.)
+        let quiet = args.quiet
+            || config::resolved_lint_verbosity(&config::load()?)? == LintVerbosity::Quiet;
         for f in &findings {
             println!("{}[{}]: {}: {}", f.severity, f.rule, f.path, f.message);
-            if let Some(help) = &f.help {
-                println!("  help: {help}");
+            if !quiet {
+                if let Some(help) = &f.help {
+                    println!("  help: {help}");
+                }
             }
         }
     }

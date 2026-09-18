@@ -29,7 +29,7 @@ pub struct KeySpec {
     pub one_of_provider: bool,
 }
 
-pub const KEYS: [KeySpec; 4] = [
+pub const KEYS: [KeySpec; 5] = [
     KeySpec {
         key: "provider",
         description: "default provider: openrouter or typesafe",
@@ -49,6 +49,11 @@ pub const KEYS: [KeySpec; 4] = [
         key: "log",
         description:
             "usage-ledger path for jev ask --log; a value of 1 means the default ledger path",
+        one_of_provider: false,
+    },
+    KeySpec {
+        key: "lint_verbosity",
+        description: "lint finding detail: full (default) prints help blocks; quiet prints rule ids only. jev ask/lint --quiet overrides",
         one_of_provider: false,
     },
 ];
@@ -83,7 +88,8 @@ pub fn load() -> Result<Config> {
         .set_default("provider", auth_default_provider())?
         .set_default("model", "")?
         .set_default("endpoint", "")?
-        .set_default("log", "")?;
+        .set_default("log", "")?
+        .set_default("lint_verbosity", "")?;
     // File::required(false): no config file yet is the first-run state, not
     // an error.
     let builder = if path.exists() {
@@ -144,6 +150,26 @@ pub fn resolved_log(cfg: &Config) -> Result<LogSetting> {
         "" => Ok(LogSetting::Off),
         "1" | "true" => Ok(LogSetting::DefaultPath),
         _ => Ok(LogSetting::Path(PathBuf::from(raw))),
+    }
+}
+
+/// Configured lint detail level. Distinct from `--quiet`: config defaults,
+/// the flag overrides.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LintVerbosity {
+    Full,
+    Quiet,
+}
+
+pub fn resolved_lint_verbosity(cfg: &Config) -> Result<LintVerbosity> {
+    let v = cfg.get_string("lint_verbosity")?;
+    match v.as_str() {
+        "" | "full" => Ok(LintVerbosity::Full),
+        "quiet" => Ok(LintVerbosity::Quiet),
+        _ => Err(anyhow!(
+            "config lint_verbosity {v:?} is not full or quiet; \
+             run `jev config set lint_verbosity <full|quiet>`"
+        )),
     }
 }
 

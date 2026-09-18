@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Translation of the server's nested Zod validation errors into readable paths
 - GitHub Actions workflow files for fmt, clippy, offline tests, build, an MSRV 1.88 job, and a weekly cargo-deny audit
 - Lint ergonomics: `jev lint --json`, documented exit codes (0 clean, 1 errors, 2 warnings-only), `--strict`, and shell completions
+- Tunable lint verbosity: `--quiet` on `ask` and `lint` prints rule ids without help blocks, plus a `lint_verbosity` config key (`full|quiet`) so agents can default to terse
 - Documentation for the CI workflows and the lint ergonomics contract
 - ANSI logo banner on bare jev --version; script-parsed version output stays plain
 - jev init: guided first-run setup that checks the binary, walks through provider and key, and prints copy-pasteable examples

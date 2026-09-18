@@ -292,6 +292,125 @@ fn ask_without_question_source_fails() {
         .failure();
 }
 
+/// `--quiet` drops the multi-line help blocks but keeps rule ids, the part
+/// agents and scripts match on. This is the token-cost lever from
+/// jevkit-26o: full output on the bad fixture carries `  help:` blocks,
+/// quiet output carries none.
+#[test]
+fn lint_quiet_drops_help_but_keeps_rule_ids() {
+    // Point XDG_CONFIG_HOME at an empty dir: the config file could otherwise
+    // carry `lint_verbosity = quiet` and invert this test's meaning.
+    let cfg_dir = std::env::temp_dir().join(format!("jev-quiet-test-{}", std::process::id()));
+    std::fs::create_dir_all(&cfg_dir).expect("create temp config dir");
+    let full = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "examples/bad-questions.yaml"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("XDG_CONFIG_HOME", &cfg_dir)
+        .output()
+        .expect("lint runs");
+    let full_out = String::from_utf8_lossy(&full.stdout);
+    assert!(
+        full_out.contains("  help:"),
+        "expected help blocks in full lint output, got:\n{full_out}"
+    );
+
+    let quiet = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "--quiet", "examples/bad-questions.yaml"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("XDG_CONFIG_HOME", &cfg_dir)
+        .assert()
+        .code(2)
+        .get_output()
+        .clone();
+    let quiet_out = String::from_utf8_lossy(&quiet.stdout);
+    assert!(
+        !quiet_out.contains("  help:"),
+        "quiet output must not contain help blocks, got:\n{quiet_out}"
+    );
+    assert!(
+        quiet_out.contains("degenerate-criteria"),
+        "quiet output must keep rule ids, got:\n{quiet_out}"
+    );
+    // Terse is strictly shorter than full for the same findings.
+    assert!(
+        quiet_out.len() < full_out.len() / 2,
+        "quiet output should be much shorter: quiet {} vs full {} bytes",
+        quiet_out.len(),
+        full_out.len()
+    );
+}
+
+/// `--quiet` on `jev ask` keeps the lint failure path terse but still names
+/// the rule. An empty state triggers the `empty-state` Error finding; the
+/// deeper error findings that carry help blocks (`non-string-criteria`) are
+/// unreachable through parsed CLI input, because input.rs coerces numerics
+/// to strings, so the observable effect here is the rule id surviving.
+#[test]
+fn ask_quiet_dry_run_trims_lint_output() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--dry-run",
+            "--quiet",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("error[empty-state]"))
+        .stderr(predicates::str::contains("fix them or pass --no-lint"));
+}
+
+/// The config path: `lint_verbosity = "quiet"` behaves like `--quiet`, and
+/// `full` restores help blocks. Set and unset through the CLI itself so the
+/// test leaves nothing behind.
+#[test]
+fn lint_verbosity_config_quiet_drops_help() {
+    let cd = env!("CARGO_MANIFEST_DIR");
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["config", "set", "lint_verbosity", "quiet"])
+        .current_dir(cd)
+        .assert()
+        .success();
+    let quiet = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "examples/bad-questions.yaml"])
+        .current_dir(cd)
+        .assert()
+        .code(2)
+        .get_output()
+        .clone();
+    assert!(
+        !String::from_utf8_lossy(&quiet.stdout).contains("  help:"),
+        "config quiet must drop help blocks"
+    );
+
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["config", "set", "lint_verbosity", "full"])
+        .current_dir(cd)
+        .assert()
+        .success();
+    let full = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "examples/bad-questions.yaml"])
+        .current_dir(cd)
+        .assert()
+        .code(2)
+        .get_output()
+        .clone();
+    assert!(
+        String::from_utf8_lossy(&full.stdout).contains("  help:"),
+        "config full must restore help blocks"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // POST_MERGE_ADJUSTMENTS for agent/cli-ergonomics (0=clean, 1=errors,
 // 2=warnings-only, --strict):
