@@ -299,7 +299,6 @@ main() {
     echo ""
     echo "    jev --version"
     echo "    jev init"
-    echo "    jev auth login"
     echo "    jev --help"
     echo ""
     echo "Documentation: https://github.com/${GITHUB_REPO}"
