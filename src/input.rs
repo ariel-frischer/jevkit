@@ -51,7 +51,45 @@ pub fn parse_value(input: &str) -> Result<Value> {
     if let Ok(v) = serde_json::from_str::<Value>(input) {
         return Ok(v);
     }
-    serde_norway::from_str::<Value>(input).context("input is neither valid JSON nor valid YAML")
+    serde_norway::from_str::<Value>(input).map_err(|e| diagnose_yaml_error(input, e))
+}
+
+/// Turn a raw YAML parser error into something actionable.
+///
+/// Two failures dominate in practice and neither is obvious from the parser's
+/// own wording. Criteria are prose, and prose contains colons.
+fn diagnose_yaml_error(input: &str, err: serde_norway::Error) -> anyhow::Error {
+    let base = format!("input is neither valid JSON nor valid YAML: {err}");
+
+    // `a: Use this when: the passage cites a source` parses as a nested
+    // mapping and fails. This is the single most likely mistake when writing
+    // criteria, because a description naturally contains ": ".
+    if err.to_string().contains("mapping values are not allowed") {
+        if let Some(line) = err
+            .location()
+            .and_then(|loc| input.lines().nth(loc.line().saturating_sub(1)))
+        {
+            return anyhow!(
+                "{base}\n\
+                 \n  {}\n\n\
+                 An unquoted value cannot contain \": \", because YAML reads it as a nested\n\
+                 mapping. Quote the whole value:\n\
+                 \n  key: \"Use this when: the text says so\"",
+                line.trim()
+            );
+        }
+    }
+
+    // YAML forbids tabs for indentation, and the parser reports only
+    // "character that cannot start any token", which does not name the cause.
+    if input
+        .lines()
+        .any(|l| l.starts_with('\t') || l.starts_with(" \t"))
+    {
+        return anyhow!("{base}\n\nYAML does not allow tabs for indentation. Use spaces.");
+    }
+
+    anyhow!("{base}")
 }
 
 fn parse_question(raw: &Value) -> Result<Question> {
@@ -108,6 +146,32 @@ fn parse_terse(
     build(kind, instructions, criteria)
 }
 
+/// Coerce a scalar the YAML parser typed as a number or boolean back into a
+/// string.
+///
+/// YAML resolves an unquoted `1.5` to a number and `true` to a boolean, but the
+/// API requires criteria to be text and rejects anything else with
+/// `400 ... criteria.1: Invalid input`. An author who writes
+///
+/// ```yaml
+/// levels:
+///   - 1.5
+/// ```
+///
+/// can only have meant the text "1.5", so there is nothing to disambiguate and
+/// no reason to make them quote it. Note that a *quoted* "1.5" arrives here
+/// already a string and is untouched, so this changes no meaning.
+///
+/// Objects and arrays are left alone: the API accepts structured guidance, and
+/// flattening it would destroy information.
+fn stringify_scalar(v: Value) -> Value {
+    match v {
+        Value::Number(n) => Value::String(n.to_string()),
+        Value::Bool(b) => Value::String(b.to_string()),
+        other => other,
+    }
+}
+
 fn build(kind: &str, instructions: Guidance, criteria: Option<Value>) -> Result<Question> {
     match kind {
         "noul" => Ok(Question::Noul {
@@ -124,7 +188,7 @@ fn build(kind: &str, instructions: Guidance, criteria: Option<Value>) -> Result<
                     anyhow!("`choice` criteria must be a mapping of option to description")
                 })?
                 .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
+                .map(|(k, v)| (k.clone(), stringify_scalar(v.clone())))
                 .collect();
             Ok(Question::Choice {
                 instructions,
@@ -140,7 +204,10 @@ fn build(kind: &str, instructions: Guidance, criteria: Option<Value>) -> Result<
                 .ok_or_else(|| {
                     anyhow!("`score` criteria must be a list of level descriptions, lowest first")
                 })?
-                .clone();
+                .iter()
+                .cloned()
+                .map(stringify_scalar)
+                .collect();
             Ok(Question::Score {
                 instructions,
                 criteria: levels,
@@ -225,6 +292,88 @@ mod tests {
         assert!(err
             .chain()
             .any(|e| e.to_string().contains("requires criteria")));
+    }
+
+    #[test]
+    fn unquoted_numeric_score_level_becomes_a_string() {
+        // YAML types this `1.5` as a number, and the API rejects a non-string
+        // level. The author can only have meant the text, so coerce it rather
+        // than making them quote it.
+        let qs = parse_questions(
+            "q:\n  score: Rate confidence\n  levels:\n    - low\n    - 1.5\n    - high\n",
+        )
+        .unwrap();
+        match &qs["q"] {
+            Question::Score { criteria, .. } => {
+                assert_eq!(criteria[1], serde_json::json!("1.5"));
+                assert!(criteria.iter().all(|c| c.is_string()));
+            }
+            other => panic!("expected score, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquoted_boolean_choice_description_becomes_a_string() {
+        let qs = parse_questions(
+            "q:\n  choice: Pick one\n  options:\n    a: true\n    b: A real description\n",
+        )
+        .unwrap();
+        match &qs["q"] {
+            Question::Choice { criteria, .. } => {
+                assert_eq!(criteria["a"], serde_json::json!("true"));
+            }
+            other => panic!("expected choice, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn coercion_leaves_ordinary_strings_alone() {
+        let qs = parse_questions(
+            "q:\n  choice: Pick one\n  options:\n    a: A real description\n    b: \"1.5\"\n",
+        )
+        .unwrap();
+        match &qs["q"] {
+            Question::Choice { criteria, .. } => {
+                assert_eq!(criteria["a"], serde_json::json!("A real description"));
+                assert_eq!(criteria["b"], serde_json::json!("1.5"));
+            }
+            other => panic!("expected choice, got {other:?}"),
+        }
+    }
+
+    /// Structured guidance must survive: the API accepts objects and arrays,
+    /// and flattening them would lose information.
+    #[test]
+    fn coercion_does_not_touch_structured_criteria() {
+        let qs = parse_questions(
+            "q:\n  choice: Pick one\n  options:\n    a:\n      when: It applies here\n      note: Extra detail\n    b: Other\n",
+        )
+        .unwrap();
+        match &qs["q"] {
+            Question::Choice { criteria, .. } => assert!(criteria["a"].is_object()),
+            other => panic!("expected choice, got {other:?}"),
+        }
+    }
+
+    /// Criteria are prose, and prose contains colons. The raw parser message
+    /// ("mapping values are not allowed in this context") does not tell an
+    /// author what to do, so the fix is spelled out.
+    #[test]
+    fn explains_an_unquoted_colon() {
+        let err = parse_questions(
+            "q:\n  choice: Pick\n  options:\n    a: Use this when: the passage cites a source\n",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("cannot contain"), "got: {msg}");
+        assert!(msg.contains("Quote the whole value"), "got: {msg}");
+    }
+
+    #[test]
+    fn explains_tab_indentation() {
+        let err = parse_questions("q:\n\tnoul: Is this valid?\n").unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("does not allow tabs"), "got: {msg}");
     }
 
     #[test]

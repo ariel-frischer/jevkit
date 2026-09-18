@@ -296,9 +296,11 @@ fn lint_choice(path: &str, criteria: &BTreeMap<String, Guidance>, findings: &mut
         findings,
     );
 
-    // YAML reads an unquoted `1.5` or `true` as a number or boolean, and the
-    // API rejects a non-string description: 400 "questions.q.criteria.low:
-    // Invalid input".
+    // Defence in depth. The parser coerces a YAML-typed number or boolean back
+    // into a string, so this is unreachable through `jev ask` or `jev lint`. It
+    // still fires for a Request built programmatically, where nothing has
+    // normalized the values, and the API rejects those with
+    // 400 "questions.q.criteria.low: Invalid input".
     for (label, desc) in criteria {
         if desc.is_number() || desc.is_boolean() {
             findings.push(
@@ -307,7 +309,7 @@ fn lint_choice(path: &str, criteria: &BTreeMap<String, Guidance>, findings: &mut
                     format!("{cpath}.{label}"),
                     format!("description for {label:?} is {desc}, not text; the API rejects it"),
                 )
-                .with_help("Quote the value, and better still describe when this option applies."),
+                .with_help("Use a string, and better still describe when this option applies."),
             );
         }
     }
@@ -373,20 +375,17 @@ fn lint_score(path: &str, criteria: &[Guidance], findings: &mut Vec<Finding>) {
                 "level description is empty",
             ));
         } else if level.is_number() || level.is_boolean() {
-            // A bare `1.5` in YAML deserializes to a JSON number, and the API
-            // rejects a non-string level outright: 400 "questions.q.criteria.1:
-            // Invalid input". This is a hard error, unlike a quoted "1.5",
-            // which the API accepts and which is merely poor practice.
+            // Defence in depth, as with choice criteria above: the parser
+            // already coerces these to strings, so this only fires for a
+            // programmatically built Request. The API rejects a non-string
+            // level with 400 "questions.q.criteria.1: Invalid input".
             findings.push(
                 Finding::error(
                     "non-string-level",
                     format!("{cpath}[{i}]"),
                     format!("level {i} is {text}, not text; the API rejects a non-string level"),
                 )
-                .with_help(
-                    "YAML reads a bare 1.5 or true as a number or boolean. Quote it, and better \
-                     still describe what the level means.",
-                ),
+                .with_help("Use a string, and better still describe what the level means."),
             );
         } else if text.trim().parse::<f64>().is_ok() {
             findings.push(
