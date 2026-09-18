@@ -18,3 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Documentation for the CI workflows and the lint ergonomics contract
 - ANSI logo banner on bare jev --version; script-parsed version output stays plain
 
+### Fixed
+
+- Cargo version now matches the v0.1.0 release tag
+

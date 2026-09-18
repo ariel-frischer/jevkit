@@ -11,3 +11,5 @@ versions:
             - 'Lint ergonomics: `jev lint --json`, documented exit codes (0 clean, 1 errors, 2 warnings-only), `--strict`, and shell completions'
             - Documentation for the CI workflows and the lint ergonomics contract
             - ANSI logo banner on bare jev --version; script-parsed version output stays plain
+        fixed:
+            - Cargo version now matches the v0.1.0 release tag
