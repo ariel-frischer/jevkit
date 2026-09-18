@@ -8,6 +8,9 @@
 
 **Typed decisions from the command line.**
 
+[![CI](https://img.shields.io/github/actions/workflow/status/ariel-frischer/jevkit/ci.yml)](https://github.com/ariel-frischer/jevkit/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 </div>
 
 A CLI for [TypeSafe's Jev](https://docs.typesafe.ai), a model that returns
@@ -24,6 +27,16 @@ $ jev ask -q severity.yaml "The deploy script drops the production database with
   "urgency": 2.82
 }
 ```
+
+Install, one line (Linux and macOS, no Rust toolchain needed, checksum verified):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
+```
+
+Or install from source: `git clone https://github.com/ariel-frischer/jevkit.git && cd jevkit && make install-global && jev auth login` — see [Install](#install) for details.
+
+**Built for AI agents too.** `jev` ships with an [agent skill](#the-agent-skill) that teaches a coding agent to drive the CLI install-free from the repo; agents can also consume it via `npx skills add ariel-frischer/jevkit`.
 
 No file, either: a question set passed inline is a one-liner.
 
@@ -109,6 +122,17 @@ pre-commit hook. That is the one place the speed is real.
 
 ### The CLI
 
+Or, if you don't want Rust at all:
+
+```bash
+JEV_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
+```
+
+It downloads the matching prebuilt binary from GitHub Releases (linux
+x86_64/aarch64, macOS x86_64/aarch64), verifies the SHA-256 checksum, backs up an
+existing install, and warns if `~/.local/bin` is not on your `PATH`. Override the
+version with `JEV_VERSION=v0.1.0`.
+
 ```bash
 git clone https://github.com/ariel-frischer/jevkit.git
 cd jevkit
@@ -117,6 +141,10 @@ jev auth login           # store a key in the OS keyring
 ```
 
 `cargo install --path .` works too. Requires a Rust toolchain.
+
+**Compatibility**: linux x86_64/aarch64 and macOS x86_64/aarch64 (glibc-based
+linux, e.g. Ubuntu 20.04+, Debian 11+, glibc ≥ 2.31; macOS 11+). Windows needs
+WSL.
 
 ### The agent skill
 
@@ -157,14 +185,7 @@ jev ask -q questions.yaml --raw                # full response with usage and co
 ```
 
 ```console
-$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?"}}' "jumping into a volcano"
-{
-  "risky": 0.97
-}
-```
-
-`--question-set` passes a question set inline as a YAML or JSON string, no file
-needed. `jev lint --question-set` works the same way.
+`jev lint --question-set` works the same way.
 
 Linting runs automatically. Errors block the call, warnings print to stderr and
 proceed. Warnings go to stderr specifically so that piping stdout to `jq` stays
@@ -224,7 +245,7 @@ logged too. `config set log <path-or-1>` makes a bare `--log` use it.
 
 ## Writing questions
 
-**YAML or JSON, anywhere a question set is accepted**, by file or on stdin. The
+**YAML or JSON, anywhere a question set is accepted**, by file or on stdin. Ready-made examples are in [`examples/`](examples/), including a clean `severity.yaml` and a file that fails every lint rule (`bad-questions.yaml`). The
 format is detected automatically, with no flag: JSON is tried first, because
 every JSON document is also valid YAML but the JSON parser gives better errors.
 
@@ -364,6 +385,11 @@ GitHub Actions runs on push and pull request.
   succeeded. So a near-limit payload only warns, and `--raw` reports the real
   `usage.input_tokens`.
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+guidelines; CI runs fmt, clippy, offline tests, and the MSRV build.
+
 ## Scope
 
 Three commands, deliberately. Saved recipes, batch processing, and calibration
@@ -371,4 +397,5 @@ sweeps are plausible next steps but are not here yet.
 
 ## License
 
-MIT
+`jevkit` is licensed under the MIT license. See the
+[`LICENSE`](LICENSE) file for more information.
