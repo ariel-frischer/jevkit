@@ -38,6 +38,10 @@ rpassword = "7.5"
 thiserror = "2.0"
 config = "0.15.20"
 
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+
 [profile.release]
 opt-level = 3
 lto = true
