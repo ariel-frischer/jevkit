@@ -153,6 +153,20 @@ Adversarial inputs all behave identically: empty state (lint error), single
 char, 5000 newlines, and control-character torture text (JSON escaping
 corner) all match the baseline byte for byte.
 
+**Rule-coverage sweep (fourth round):** every rule id in lint.rs now has a
+fired observation: empty-instructions, missing-criteria (parse-time), single-
+option, degenerate-criteria, no-escape-option, single-level, numeric-level,
+too-many-levels, empty-level, conditional-question, compound-question,
+terse-instructions, noul-criteria-shape, noul-criteria-incomplete,
+no-questions, empty-state, context-pressure, and context-overflow. Baseline
+and optimized outputs are byte-identical on all of them.
+
+Heaviest legal workload (100 questions x 10 options, 80 KB question set plus
+a 25k-word state): outputs identical, and the optimized build measured
+1.07x faster there too. A live call through the installed ~/.local/bin/jev
+with the near-limit state reported 25,453 real input tokens against the
+32,000 limit, and the local char/4 estimate agreed within a few percent.
+
 ## References
 
 - <https://doc.rust-lang.org/cargo/reference/profiles.html> for profile knobs.
