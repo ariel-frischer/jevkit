@@ -116,23 +116,45 @@ pub fn lint_request(req: &Request) -> Vec<Finding> {
     }
 
     // The whole payload counts against the context window, not just the state.
+    //
+    // `estimate_tokens` is a crude chars/4 heuristic, and measurement showed it
+    // running high: a payload it estimated at 38,751 tokens was reported by the
+    // API as 31,272 actual tokens, a 24% overestimate, and the call succeeded.
+    // An error there would have blocked a request that works.
+    //
+    // So the hard error is reserved for payloads that cannot fit under any
+    // plausible tokenization, and anything merely near the limit is a warning.
+    // Being wrong in the warning direction costs a stderr line; being wrong in
+    // the error direction costs the user a call they were entitled to make.
     let payload = serde_json::to_string(req).unwrap_or_default();
     let tokens = estimate_tokens(&payload);
-    if tokens > MAX_CONTEXT_TOKENS {
+    // Even a pathological worst case does not compress below ~1 token per
+    // character, so an estimate above 4x the limit cannot possibly fit.
+    if tokens > MAX_CONTEXT_TOKENS * 4 {
         findings.push(
             Finding::error(
                 "context-overflow",
                 "state",
-                format!("estimated {tokens} tokens exceeds the {MAX_CONTEXT_TOKENS} limit"),
+                format!(
+                    "roughly {tokens} estimated tokens cannot fit the {MAX_CONTEXT_TOKENS}-token limit"
+                ),
             )
             .with_help("Split the state, or drop questions that do not need the full context."),
         );
-    } else if tokens > MAX_CONTEXT_TOKENS * 9 / 10 {
-        findings.push(Finding::warn(
-            "context-pressure",
-            "state",
-            format!("estimated {tokens} tokens is within 10% of the {MAX_CONTEXT_TOKENS} limit"),
-        ));
+    } else if tokens > MAX_CONTEXT_TOKENS {
+        findings.push(
+            Finding::warn(
+                "context-pressure",
+                "state",
+                format!(
+                    "roughly {tokens} estimated tokens may exceed the {MAX_CONTEXT_TOKENS}-token limit"
+                ),
+            )
+            .with_help(
+                "The estimate is chars/4 and measured ~24% high on prose, so this may still fit. \
+                 Check `usage.input_tokens` with --raw if you need the real figure.",
+            ),
+        );
     }
 
     findings.sort_by(|a, b| a.severity.cmp(&b.severity).then(a.path.cmp(&b.path)));
@@ -525,16 +547,44 @@ mod tests {
         assert!(rules(&lint_questions(&qs)).contains(&"conditional-question"));
     }
 
-    #[test]
-    fn flags_context_overflow() {
-        let req = Request {
+    fn request_with_state_len(len: usize) -> Request {
+        Request {
             model: "typesafe/jev-1.13".into(),
-            state: json!("x".repeat(MAX_CONTEXT_TOKENS * 4 + 100)),
+            state: json!("x".repeat(len)),
             questions: questions(json!({
                 "q": {"type": "noul", "instructions": "Is this a long document?"}
             })),
             session_id: None,
-        };
+        }
+    }
+
+    /// Only a payload that cannot fit under any tokenization is an error.
+    #[test]
+    fn flags_context_overflow() {
+        let req = request_with_state_len(MAX_CONTEXT_TOKENS * 4 * 4 + 1000);
         assert!(rules(&lint_request(&req)).contains(&"context-overflow"));
+    }
+
+    /// Regression: a payload estimated at 38,751 tokens was reported by the API
+    /// as 31,272 actual tokens and the call succeeded. Erroring there blocks a
+    /// request the user is entitled to make, so this range must only warn.
+    #[test]
+    fn near_limit_warns_but_does_not_error() {
+        let req = request_with_state_len(155_000);
+        let found = lint_request(&req);
+        assert!(rules(&found).contains(&"context-pressure"));
+        assert!(
+            !found.iter().any(|f| f.severity == Severity::Error),
+            "an over-high estimate must not block a call that would succeed"
+        );
+    }
+
+    #[test]
+    fn ordinary_payloads_raise_no_context_findings() {
+        let req = request_with_state_len(1_000);
+        let findings = lint_request(&req);
+        let found = rules(&findings);
+        assert!(!found.contains(&"context-pressure"));
+        assert!(!found.contains(&"context-overflow"));
     }
 }

@@ -77,6 +77,10 @@ examples/      # severity.yaml is clean; bad-questions.yaml fails every rule.
 - Server-side validation is Zod. Errors arrive as a JSON-encoded string nested
   inside `error.message`, so the useful part is two layers deep.
 - Context limit is 32k tokens over the whole payload, not just the state.
+  `estimate_tokens` is chars/4 and measures **high**: a payload it estimated at
+  38,751 tokens was reported by the API as 31,272 actual tokens and the call
+  succeeded. An early version errored there and blocked a working request. A
+  local estimate that can be wrong in the user's favor must warn, not error.
 - Additional questions add no latency: Jev answers them in parallel. Batch into
   one request rather than looping.
 
@@ -87,6 +91,11 @@ examples/      # severity.yaml is clean; bad-questions.yaml fails every rule.
   rule that trains users to pass `--no-lint`.
 - Errors are for things the API rejects. Everything else is a warning. Do not
   promote a heuristic to an error.
+- **A rule built on a local estimate must warn, never error.** Estimates can be
+  wrong in the user's favor, and an error then blocks a call that would have
+  worked. This already happened once with `context-overflow`. Before shipping a
+  new error rule, confirm with `--no-lint` that the API really does reject the
+  payload.
 - Warnings go to stderr in `ask`, so piping stdout to `jq` stays safe.
 - Tests must not require an API key or a network connection. All of them.
 - Never log, print, or echo a key. `auth status` prints a fingerprint: length

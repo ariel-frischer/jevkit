@@ -144,7 +144,7 @@ q:
 |---|---|---|
 | `missing-criteria` | error | `choice`/`score` without criteria, which the API rejects |
 | `empty-instructions` | error | A question with nothing to judge |
-| `context-overflow` | error | A payload over the 32k-token limit |
+| `context-overflow` | error | A payload that cannot fit the 32k-token limit under any tokenization |
 | `degenerate-criteria` | warning | Criteria that restate the label |
 | `single-option` | warning | A `choice` with one option |
 | `single-level` | warning | A `score` with one level |
@@ -152,6 +152,7 @@ q:
 | `conditional-question` | warning | "if applicable" phrasing, which returns ~0.5 regardless |
 | `compound-question` | warning | A `noul` weighing two properties at once |
 | `no-escape-option` | warning | A `choice` that cannot decline to answer |
+| `context-pressure` | warning | A payload that may exceed the token limit |
 | `terse-instructions` | warning | Instructions too short to state a condition |
 
 Errors are certain. Warnings are heuristics: they flag questions that are valid
@@ -189,7 +190,11 @@ round trip.
 - `criteria` is required for `choice` and `score`, optional for `noul`.
 - `noul` answers carry no `confidence` field. Only `choice` and `score` do.
   Derive uncertainty from the probability's distance from 0.5.
-- The context limit is 32k tokens, counted over the whole payload.
+- The context limit is 32k tokens, counted over the whole payload. Note that
+  `jev`'s local estimate is a crude chars/4 heuristic and measures high: a
+  payload it estimated at 38,751 tokens was reported by the API as 31,272 and
+  succeeded. So a near-limit payload only warns, and `--raw` reports the real
+  `usage.input_tokens`.
 
 ## Scope
 
