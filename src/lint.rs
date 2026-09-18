@@ -21,7 +21,7 @@
 //!   clustered near 0.5, which is indistinguishable from genuine uncertainty.
 //!
 //! Findings are advisory by default: this lints style, and style rules are
-//! heuristics. `--deny warnings` makes them fatal for CI.
+//! heuristics. `--strict` makes warnings fatal for CI.
 
 use crate::types::{
     estimate_tokens_len, serialized_len, Guidance, Question, Request, MAX_CONTEXT_TOKENS,

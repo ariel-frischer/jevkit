@@ -498,44 +498,58 @@ fn cmd_lint(args: LintArgs) -> Result<()> {
     let findings = lint::lint_questions(&questions);
 
     if args.json {
-        let payload: Vec<_> = findings
-            .iter()
-            .map(|f| {
-                serde_json::json!({
-                    "severity": f.severity.to_string(),
-                    "rule": f.rule,
-                    "path": f.path,
-                    "message": f.message,
-                    "help": f.help,
-                })
-            })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&payload)?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&lint_json_payload(&findings))?
+        );
     } else if findings.is_empty() {
         println!("{} question(s), no problems found", questions.len());
     } else {
-        // Text findings go to stderr so `jev lint file.yaml | jq` (or the like)
-        // still gets a clean stdout.
+        // Findings go to stdout: `jev lint file.yaml | jq` should see them.
+        // (In `ask`, lint warnings are on stderr instead; there stdout carries
+        // the model's answers.)
         for f in &findings {
-            eprintln!("{}[{}]: {}: {}", f.severity, f.rule, f.path, f.message);
+            println!("{}[{}]: {}: {}", f.severity, f.rule, f.path, f.message);
             if let Some(help) = &f.help {
-                eprintln!("  help: {help}");
+                println!("  help: {help}");
             }
         }
     }
 
-    let errors = findings
-        .iter()
-        .filter(|f| f.severity == Severity::Error)
-        .count();
-    let warnings = findings.len() - errors;
-    if errors > 0 || (args.strict && warnings > 0) {
-        std::process::exit(1);
-    }
-    if warnings > 0 {
-        std::process::exit(2); // Warnings-only: actionable, not fatal.
+    let code = lint_exit_code(&findings, args.strict);
+    if code != 0 {
+        std::process::exit(code);
     }
     Ok(())
+}
+
+/// The `--json` shape: rule id, severity string, location, message, help.
+fn lint_json_payload(findings: &[lint::Finding]) -> Vec<serde_json::Value> {
+    findings
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "severity": f.severity.to_string(),
+                "rule": f.rule,
+                "path": f.path,
+                "message": f.message,
+                "help": f.help,
+            })
+        })
+        .collect()
+}
+
+/// Exit codes: 0 clean, 1 errors found (or any finding with `--strict`),
+/// 2 warnings only.
+fn lint_exit_code(findings: &[lint::Finding], strict: bool) -> i32 {
+    if findings.is_empty() {
+        return 0;
+    }
+    let has_error = findings.iter().any(|f| f.severity == Severity::Error);
+    if has_error || strict {
+        return 1;
+    }
+    2
 }
 
 fn cmd_auth(args: AuthArgs) -> Result<()> {
@@ -616,34 +630,53 @@ fn read_source(path: Option<&std::path::Path>) -> Result<String> {
 mod cli_tests {
     use super::*;
 
+    /// The exact JSON contract for `jev lint --json`: every finding carries a
+    /// rule id, a severity string, a message, a location, and optional help.
     #[test]
     fn json_output_has_required_fields() {
-        // Path to exit codes lives in cmd_lint; here we check the JSON shape
-        // against a real finding round-tripped through serde_json.
-        let f = lint::Finding {
+        let findings = vec![lint::Finding {
             severity: Severity::Warning,
-            rule: "test-rule",
+            rule: "degenerate-criteria",
             path: "questions.scheme.criteria".to_string(),
             message: "msg".to_string(),
             help: Some("hit".to_string()),
-        };
-        let payload = serde_json::json!({
-            "severity": f.severity.to_string(),
-            "rule": f.rule,
-            "path": f.path,
-            "message": f.message,
-            "help": f.help,
-        });
-        assert_eq!(payload["rule"], "test-rule");
-        assert_eq!(payload["severity"], "warning");
-        assert_eq!(payload["path"], "questions.scheme.criteria");
-        assert_eq!(payload["message"], "msg");
-        assert_eq!(payload["help"], "hit");
+        }];
+        let payload = lint_json_payload(&findings);
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json[0]["rule"], "degenerate-criteria");
+        assert_eq!(json[0]["severity"], "warning");
+        assert_eq!(json[0]["path"], "questions.scheme.criteria");
+        assert_eq!(json[0]["message"], "msg");
+        assert_eq!(json[0]["help"], "hit");
+    }
+
+    #[test]
+    fn lint_exit_codes_reflect_severity() {
+        // 0 clean, 1 errors, 2 warnings only, 1 warnings with --strict.
+        let with_error = vec![lint::Finding {
+            severity: Severity::Error,
+            rule: "missing-criteria",
+            path: "questions.q.criteria".to_string(),
+            message: String::new(),
+            help: None,
+        }];
+        let with_warning = vec![lint::Finding {
+            severity: Severity::Warning,
+            rule: "single-option",
+            path: "questions.q.criteria".to_string(),
+            message: String::new(),
+            help: None,
+        }];
+        assert_eq!(lint_exit_code(&[], false), 0);
+        assert_eq!(lint_exit_code(&with_error, false), 1);
+        assert_eq!(lint_exit_code(&with_warning, false), 2);
+        assert_eq!(lint_exit_code(&with_warning, true), 1);
+        assert_eq!(lint_exit_code(&with_error, true), 1);
     }
 
     #[test]
     fn version_stamp_starts_with_crate_version() {
-        assert!(version_string().starts_with(env!("CARGO_PKG_VERSION")));
+        assert!(version_string().starts_with(VERSION_BASE));
     }
 
     #[test]
@@ -653,5 +686,32 @@ mod cli_tests {
         // Hidden subcommands don't show in help text.
         let text = cmd.render_help().to_string();
         assert!(!text.contains("completions"));
+    }
+
+    /// The man page renders non-empty and names the binary.
+    #[test]
+    fn man_page_renders_for_the_cli() {
+        let mut buf = Vec::new();
+        clap_mangen::Man::new(Cli::command())
+            .render(&mut buf)
+            .unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(text.contains(".TH jev 1"), "man page header missing");
+        assert!(text.contains("jev ask") || text.contains("ask"));
+    }
+
+    /// Every shell variant emits something.
+    #[test]
+    fn completions_render_for_each_shell() {
+        for shell in [
+            clap_complete::Shell::Bash,
+            clap_complete::Shell::Zsh,
+            clap_complete::Shell::Fish,
+        ] {
+            let mut cmd = Cli::command();
+            let mut buf = Vec::new();
+            clap_complete::generate(shell, &mut cmd, "jev", &mut buf);
+            assert!(!buf.is_empty(), "{shell:?} produced no completions");
+        }
     }
 }
