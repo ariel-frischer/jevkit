@@ -7,7 +7,11 @@ use std::process::Command;
 fn main() {
     let hash = git_hash();
     println!("cargo:rustc-env=JEV_GIT_HASH={hash}");
-    println!("cargo:rerun-if-changed=.git/HEAD");
+    // Deliberately no `rerun-if-changed` line: `.git/HEAD` does not exist as a
+    // file in linked worktrees (there `.git` is a file pointing at the shared
+    // gitdir), so that directive would pin the stamp to a stale hash. With no
+    // directive, every rebuild in this crate re-stamps; that is cheap and
+    // correct.
 }
 
 /// Short hash of HEAD, or empty when the build cannot see git (tarball
