@@ -103,6 +103,41 @@ exact. Output is byte-identical to the baseline (verified by diff on both
 - Cached/parallel linting if question sets grow into the thousands of
   questions; not currently a real workload.
 
+## Acceptance-path validation (second round, same day)
+
+Beyond the hyperfine numbers, the shipped binary was diffed against the
+pre-change baseline (`/tmp/jev-baseline`, commit e2f765a) across the real
+acceptance paths:
+
+- **Token-estimate boundaries**: states of 120 KB (no finding), 135 KB
+  (`context-pressure`), and 520 KB (`context-overflow`, exit 1) produce
+  identical findings on both binaries. The estimate did not shift.
+- **Serialization parity**: `ask --dry-run` full-request output is
+  byte-identical on 12 randomized states (mixed size 1 KB-300 KB, unicode and
+  escape characters mixed in) and on 7 generated question-sets (terse and
+  canonical, all three primitives, nested objects, 50-question set) crossed
+  with two state shapes. `lint --json` is byte-identical on the same corpus
+  plus a terse-YAML file.
+- **Error paths**: malformed YAML and a missing file produce identical
+  messages and exit codes.
+- **Piping contract**: with lint warnings enabled, stderr content is
+  identical; stdout stays pure JSON (0 stderr bytes when piping stdout only).
+
+Perf numbers by workload:
+
+| workload | baseline | optimized | ratio |
+|---|---|---|---|
+| `ask --dry-run`, 117 KB state (5 runs) | 760-785 us | 700-726 us | 1.07-1.10x |
+| `lint`, 50-question set (4 runs) | 618-630 us | 610-624 us | ~1.01x, within noise |
+
+The 50-question set shows no measurable gain, as expected: that path never
+serialized a large payload, and the question-set parse dominates. The gain
+concentrates exactly where the removed allocation lived, which is the
+evidence that the mechanism, not luck, produced it.
+
+`cargo test` passes in both debug and release (32 passed, 1 ignored: the
+keyring round-trip that requires a desktop Secret Service).
+
 ## References
 
 - <https://doc.rust-lang.org/cargo/reference/profiles.html> for profile knobs.
