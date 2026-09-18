@@ -37,6 +37,8 @@ reqwest = { version = "0.13", default-features = false, features = [
 # Keychain on macOS, Credential Manager on Windows, Secret Service on Linux.
 keyring = "4.2"
 rpassword = "7.5"
+url = "2.5"
+dialoguer = { version = "0.11", default-features = false, features = ["editor", "fuzzy-select"] }
 thiserror = "2.0"
 config = "0.15.20"
 

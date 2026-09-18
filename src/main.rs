@@ -78,6 +78,21 @@ enum Command {
     },
     /// Manage stored API credentials
     Auth(AuthArgs),
+    /// Interactive first-run setup: provider, key, and optional custom endpoint
+    ///
+    /// Hidden: the visible three-command surface stays, as with `completions`.
+    #[command(hide = true)]
+    Init {
+        /// Provider to configure (skips the provider prompt). `custom`
+        /// combines with `JEV_INIT_BASE` (default openrouter) for the keyring
+        /// slot, or leaves it to the interactive prompt.
+        #[arg(long, value_name = "NAME")]
+        provider: Option<String>,
+
+        /// Skip the API key prompt entirely
+        #[arg(long)]
+        no_key: bool,
+    },
     /// Print shell completions and the man page
     ///
     /// Hidden: the visible three-command surface stays. Autocomplete the
@@ -243,6 +258,7 @@ fn run() -> Result<()> {
         Command::Ask(args) => cmd_ask(args),
         Command::Lint(args) => cmd_lint(args),
         Command::Auth(args) => cmd_auth(args),
+        Command::Init { provider, no_key } => cmd_init(provider, no_key),
         Command::Config { command } => cmd_config(command),
         Command::Completions { shell } => cmd_completions_manpage(shell),
     }
@@ -440,7 +456,9 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
     }
 
     let (key, _source) = auth::resolve(provider, args.api_key.as_deref())?;
-    let client = client::Client::new(provider.endpoint, key)?;
+    let endpoint =
+        config::resolved_endpoint(&defaults)?.unwrap_or_else(|| provider.endpoint.to_string());
+    let client = client::Client::new(endpoint.as_str(), key.clone())?;
     let started = std::time::Instant::now();
     let result = client.decide(&request);
     let elapsed_ms = started.elapsed().as_millis();
@@ -474,7 +492,7 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         let call_result = {
             let meta = usage::CallMeta {
                 provider: provider.name,
-                endpoint: provider.endpoint,
+                endpoint: &endpoint,
                 model: &request.model,
                 session_id: session_id_ref.as_deref(),
                 elapsed_ms,
@@ -587,28 +605,179 @@ fn lint_exit_code(findings: &[lint::Finding], strict: bool) -> i32 {
     2
 }
 
+/// Prompt for an API key on a hidden TTY and store it in the keyring.
+///
+/// Never taken from argv: arguments are visible in the process list and in
+/// shell history.
+fn prompt_and_store_key(provider: auth::Provider) -> Result<(String, String)> {
+    if !std::io::stdin().is_terminal() {
+        bail!(
+            "`jev init`/`jev auth login` need a terminal to prompt for the key.\n\
+             For non-interactive use, set {}.",
+            provider.env_var
+        );
+    }
+    print!("API key for {}: ", provider.name);
+    std::io::stdout().flush().ok();
+    let key = rpassword::read_password().context("failed to read the key")?;
+    let key = key.trim().to_string();
+    if key.is_empty() {
+        bail!("no key entered");
+    }
+    let fp = auth::fingerprint(&key);
+    auth::keyring_set(provider, &key)?;
+    Ok((key, fp))
+}
+
+/// Interactive first-run setup with `dialoguer`. Flags passed to `jev init`
+/// pre-answer questions, so an agent can run it non-interactively; any
+/// remaining prompt fails fast when stdin is not a terminal.
+fn cmd_init(provider_flag: Option<String>, no_key: bool) -> Result<()> {
+    const CUSTOM: &str = "custom";
+
+    // Non-interactive shortcut: `--provider custom` needs the endpoint URL,
+    // which may never live in argv (jev init is meant to be run by a human
+    // when it can be).
+    if provider_flag.as_deref() == Some("custom") {
+        bail!(
+            "--provider custom needs a terminal to enter the endpoint URL, \
+             or set JEV_INIT_ENDPOINT"
+        );
+    }
+
+    // Provider: flag, else a select over the presets plus "custom".
+    let provider = if let Some(name) = provider_flag {
+        auth::provider_by_name(&name)?
+    } else if !std::io::stdin().is_terminal() {
+        bail!(
+            "`jev init` needs a terminal, or pass --provider ({}|custom) to skip the prompt",
+            auth::PROVIDERS
+                .iter()
+                .map(|p| p.name)
+                .collect::<Vec<_>>()
+                .join("|")
+        );
+    } else {
+        let current = config::load()
+            .and_then(|cfg| config::resolved_provider(&cfg))
+            .unwrap_or_else(|_| auth::OPENROUTER.name.to_string());
+        let index = dialoguer::Select::new()
+            .with_prompt("Provider")
+            .default(
+                auth::PROVIDERS
+                    .iter()
+                    .position(|p| p.name == current)
+                    .unwrap_or(0),
+            )
+            .items(
+                &auth::PROVIDERS
+                    .iter()
+                    .map(|p| format!("{} — {}", p.name, p.endpoint))
+                    .chain([format!("{CUSTOM} — enter your own decisions URL")])
+                    .collect::<Vec<_>>(),
+            )
+            .interact()
+            .context("provider selection failed")?;
+        if index < auth::PROVIDERS.len() {
+            auth::PROVIDERS[index]
+        } else {
+            return init_custom_interactive(no_key);
+        }
+    };
+
+    write_config_key("provider", provider.name)?;
+    println!(
+        "Wrote provider={} to {}",
+        provider.name,
+        config::config_path()?.display()
+    );
+
+    if !no_key {
+        let (_, fingerprint) = prompt_and_store_key(provider)?;
+        println!("Key stored in the OS keyring ({}).", fingerprint);
+    } else {
+        println!(
+            "Key not prompted; run `jev auth login --provider {}`, or set {}.",
+            provider.name, provider.env_var
+        );
+    }
+    Ok(())
+}
+
+/// Finish setup for a custom endpoint: validate the URL, write `provider`
+/// plus `endpoint`, and prompt for the key if wanted.
+/// Custom endpoint chosen interactively: ask which preset's keyring slot and
+/// env var the key belongs to (the URL is transport, the credential naming is
+/// what matters), then the URL itself.
+fn init_custom_interactive(no_key: bool) -> Result<()> {
+    if !std::io::stdin().is_terminal() {
+        bail!("a custom endpoint needs a terminal, or run `jev config set endpoint URL`");
+    }
+    let labels: Vec<String> = auth::PROVIDERS
+        .iter()
+        .map(|p| format!("{} (key in {}, {})", p.name, p.name, p.env_var))
+        .collect();
+    let base = match auth::PROVIDERS.len() {
+        0 => unreachable!("at least one preset provider exists"),
+        _ => {
+            let idx = dialoguer::Select::new()
+                .with_prompt("Credential slot for the custom endpoint")
+                .default(0)
+                .items(&labels)
+                .interact()
+                .context("credential slot selection failed")?;
+            auth::PROVIDERS[idx]
+        }
+    };
+    let url: String = dialoguer::Input::new()
+        .with_prompt("Custom decisions endpoint (full URL)")
+        .validate_with(|s: &String| validate_https_url(s).map(|_: url::Url| ()))
+        .interact_text()
+        .context("endpoint entry failed")?;
+    cmd_init_custom(&url, base, no_key)
+}
+
+/// Validate a custom endpoint URL: parseable and https.
+fn validate_https_url(url: &str) -> Result<url::Url> {
+    let parsed = url::Url::parse(url).with_context(|| format!("not a valid URL: {url:?}"))?;
+    if parsed.scheme() != "https" {
+        bail!(
+            "endpoint must be https (got {:?}); the API key would otherwise be sent in the clear",
+            parsed.scheme()
+        );
+    }
+    Ok(parsed)
+}
+
+/// Finish setup for a custom endpoint URL: write `provider` plus `endpoint`,
+/// and prompt for the key if wanted.
+fn cmd_init_custom(url: &str, base: auth::Provider, no_key: bool) -> Result<()> {
+    validate_https_url(url)?;
+    write_config_key("provider", base.name)?;
+    write_config_key("endpoint", url)?;
+    println!(
+        "Wrote provider={} and endpoint={url} to {}",
+        base.name,
+        config::config_path()?.display()
+    );
+    if !no_key {
+        let (_, fp) = prompt_and_store_key(base)?;
+        println!("Key stored in the OS keyring ({}).", fp);
+    } else {
+        println!(
+            "Key not prompted; set {} or run `jev auth login --provider {}`.",
+            base.env_var, base.name
+        );
+    }
+    Ok(())
+}
+
 fn cmd_auth(args: AuthArgs) -> Result<()> {
     match args.command {
         AuthCommand::Login { provider } => {
             let provider = auth::provider_by_name(&provider)?;
-            if !std::io::stdin().is_terminal() {
-                bail!(
-                    "`jev auth login` needs a terminal to prompt for the key.\n\
-                     For non-interactive use, set {}.",
-                    provider.env_var
-                );
-            }
-            // Prompted, never taken from argv: arguments are visible in the
-            // process list and in shell history.
-            print!("API key for {}: ", provider.name);
-            std::io::stdout().flush().ok();
-            let key = rpassword::read_password().context("failed to read the key")?;
-            let key = key.trim();
-            if key.is_empty() {
-                bail!("no key entered");
-            }
-            auth::keyring_set(provider, key)?;
-            println!("Stored in the OS keyring ({}).", auth::fingerprint(key));
+            let (_, fingerprint) = prompt_and_store_key(provider)?;
+            println!("Stored in the OS keyring ({}).", fingerprint);
         }
         AuthCommand::Logout { provider } => {
             let provider = auth::provider_by_name(&provider)?;

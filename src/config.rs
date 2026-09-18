@@ -29,7 +29,7 @@ pub struct KeySpec {
     pub one_of_provider: bool,
 }
 
-pub const KEYS: [KeySpec; 3] = [
+pub const KEYS: [KeySpec; 4] = [
     KeySpec {
         key: "provider",
         description: "default provider: openrouter or typesafe",
@@ -38,6 +38,11 @@ pub const KEYS: [KeySpec; 3] = [
     KeySpec {
         key: "model",
         description: "default model, e.g. typesafe/jev-1.13",
+        one_of_provider: false,
+    },
+    KeySpec {
+        key: "endpoint",
+        description: "override the decisions URL, e.g. a proxy or self-hosted /api/alpha/decisions",
         one_of_provider: false,
     },
     KeySpec {
@@ -77,6 +82,7 @@ pub fn load() -> Result<Config> {
     let builder = Config::builder()
         .set_default("provider", auth_default_provider())?
         .set_default("model", "")?
+        .set_default("endpoint", "")?
         .set_default("log", "")?;
     // File::required(false): no config file yet is the first-run state, not
     // an error.
@@ -113,6 +119,13 @@ pub fn resolved_provider(cfg: &Config) -> Result<String> {
 pub fn resolved_model(cfg: &Config) -> Result<Option<String>> {
     let m = cfg.get_string("model")?;
     Ok((!m.is_empty()).then_some(m))
+}
+
+/// The endpoint override from config, or `None` when unset (caller then uses
+/// the provider's built-in URL).
+pub fn resolved_endpoint(cfg: &Config) -> Result<Option<String>> {
+    let e = cfg.get_string("endpoint")?;
+    Ok((!e.is_empty()).then_some(e))
 }
 
 /// The configured ledger behavior.

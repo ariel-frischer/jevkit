@@ -99,7 +99,8 @@ tool does not claim otherwise.
 git clone https://github.com/ariel-frischer/jevkit.git
 cd jevkit
 make install-global      # builds and installs ~/.local/bin/jev
-jev auth login           # store a key in the OS keyring
+jev init                 # provider, custom endpoint, key in the OS keyring
+# or non-interactive: `jev init --no-key --provider openrouter` then `jev auth login`
 ```
 
 ### Installer internals
@@ -176,6 +177,11 @@ subcommand, generated at build time alongside the binary.
 
 ### `jev auth`
 
+First-time setup: `jev init` interactively picks a provider (or a custom
+decisions URL), stores the API key in the OS keyring, and writes the config
+defaults. Flags pre-answer it for scripts and agents:
+`jev init --no-key --provider typesafe`.
+
 ```bash
 jev auth login      # prompts on a hidden TTY, stores in the OS keyring
 jev auth status     # shows which credential would be used, never the value
@@ -188,7 +194,9 @@ because argv is readable by other processes and lands in shell history.
 
 ### `jev config`
 
-User defaults in `~/.config/jev/config.toml`. Keys: `provider`, `model`, `log`.
+User defaults in `~/.config/jev/config.toml`. Keys: `provider`, `model`,
+`endpoint` (override the decisions URL, e.g. a proxy or self-hosted install),
+and `log`.
 
 ```bash
 jev config keys     # what is configurable
