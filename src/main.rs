@@ -17,6 +17,7 @@ mod client;
 mod input;
 mod lint;
 mod types;
+mod usage;
 
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
@@ -99,6 +100,12 @@ struct AskArgs {
     /// Groups related calls for observability. Never sent to the model.
     #[arg(long, value_name = "ID")]
     session_id: Option<String>,
+
+    /// Append this call to the usage ledger. Optional path; defaults to
+    /// $XDG_STATE_HOME/jev/usage.jsonl (~/.local/state/jev/usage.jsonl).
+    /// Can also be enabled with JEV_LOG_FILE=1 for the default path.
+    #[arg(long, value_name = "FILE", num_args = 0..=1, default_missing_value = "")]
+    log: Option<String>,
 }
 
 #[derive(Args)]
@@ -182,6 +189,7 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         .model
         .unwrap_or_else(|| provider.default_model.to_string());
 
+    let session_id_ref = args.session_id.clone();
     let request = Request {
         model,
         state: serde_json::Value::String(state_text),
@@ -220,7 +228,53 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
 
     let (key, _source) = auth::resolve(provider, args.api_key.as_deref())?;
     let client = client::Client::new(provider.endpoint, key)?;
-    let response = client.decide(&request)?;
+    let started = std::time::Instant::now();
+    let result = client.decide(&request);
+    let elapsed_ms = started.elapsed().as_millis();
+
+    // Opt-in ledger. Failure to log is surfaced but never replaces the real
+    // result of a paid call.
+    if args.log.is_some() || std::env::var_os("JEV_LOG_FILE").is_some() {
+        let record_request = serde_json::to_value(&request)
+            .context("failed to serialize the request for the usage ledger")?;
+        let ledger_path = usage::resolve_log_path(
+            args.log
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(std::path::PathBuf::from),
+        )?;
+        let call_result = {
+            let meta = usage::CallMeta {
+                provider: provider.name,
+                endpoint: provider.endpoint,
+                model: &request.model,
+                session_id: session_id_ref.as_deref(),
+                elapsed_ms,
+            };
+            match &result {
+                Ok(response) => {
+                    usage::log_call(&ledger_path, &meta, &record_request, Some(response), "ok")
+                }
+                Err(err) => usage::log_call(
+                    &ledger_path,
+                    &meta,
+                    &record_request,
+                    Option::<&serde_json::Value>::None,
+                    "error",
+                )
+                .map(|_| {
+                    eprintln!("note: call error was: {err:#}");
+                }),
+            }
+        };
+        if let Err(e) = call_result {
+            eprintln!("warning: could not write the usage ledger: {e:#}");
+        } else if result.is_ok() {
+            eprintln!("usage ledger: {}", ledger_path.display());
+        }
+    }
+
+    let response = result?;
 
     if args.raw {
         println!("{}", serde_json::to_string_pretty(&response)?);
