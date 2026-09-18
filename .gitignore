@@ -36,6 +36,12 @@ skills-lock.json
 # Codex harness local config (bd hooks)
 .codex/
 
+# Agent-private docs (global instruction convention)
+docs/local/
+
+# Sample inputs and local runs
+/local/
+
 # Agent worktrees
 .worktrees/
 tapes/

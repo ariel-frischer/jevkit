@@ -1,0 +1,20 @@
+triage:
+  choice: What action should the on-call engineer take on this alert?
+  options:
+    ignore: No user-visible impact; leave it for the next planning cycle
+    ack: Acknowledge and monitor, no intervention needed yet
+    page: Act now, the described condition is an outage or will become one
+    none: The alert does not describe a condition needing engineering action
+
+blast_radius:
+  score: How many users are affected by what the alert describes?
+  levels:
+    - Only test or internal systems
+    - A single tenant or a small subset of users
+    - A large share of active users
+
+data_at_risk:
+  noul: Does the alert indicate data is currently being lost or corrupted?
+
+followup:
+  noul: Given the action chosen above, should this alert also open a postmortem?
