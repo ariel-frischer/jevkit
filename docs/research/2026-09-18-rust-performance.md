@@ -138,6 +138,23 @@ evidence that the mechanism, not luck, produced it.
 `cargo test` passes in both debug and release (32 passed, 1 ignored: the
 keyring round-trip that requires a desktop Secret Service).
 
+**Real network path (third round):** both binaries were pointed at the live
+API. An invalid key produces an identical 401 message from both. With the
+configured key, one live call per binary succeeded end to end (exit 0, parsed
+answers); answer values differed between calls but the baseline itself varies
+across calls by the same spread (server-side sampling), so no client
+regression is indicated. The compact wire body, derived from the dry-run
+Request on both binaries, hashes identically
+(sha256 f24836...70cc), which pins the bytes reqwest will send via
+. The optimized binary is also installed to ~/.local/bin via
+cargo build --release
+install -m 0755 target/release/jev /home/ari/.local/bin/jev
+Installed /home/ari/.local/bin/jev (md5 matches the fresh build).
+
+Adversarial inputs all behave identically: empty state (lint error), single
+char, 5000 newlines, and control-character torture text (JSON escaping
+corner) all match the baseline byte for byte.
+
 ## References
 
 - <https://doc.rust-lang.org/cargo/reference/profiles.html> for profile knobs.
