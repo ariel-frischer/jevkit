@@ -1,0 +1,125 @@
+name: Release
+
+# Trigger: push a tag like v0.1.0 (or `make release VERSION=v0.1.0`).
+# Builds release binaries for the main desktop targets and creates a GitHub
+# Release whose notes come from CHANGELOG.md for that version.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN: jev
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: jev-x86_64-linux.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+            archive: jev-aarch64-linux.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: jev-x86_64-macos.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: jev-aarch64-macos.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: jev-x86_64-windows.zip
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup target add ${{ matrix.target }}
+
+      - name: Install cross (Linux aarch64)
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+        shell: bash
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf "$GITHUB_WORKSPACE/${{ matrix.archive }}" "$BIN"
+          cd "$GITHUB_WORKSPACE"
+          shasum -a 256 "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "target/${{ matrix.target }}/release/jev.exe"
+          Compress-Archive -Path $dir -DestinationPath "${{ matrix.archive }}"
+          $h = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
+          "$h  ${{ matrix.archive }}" | Out-File "${{ matrix.archive }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            ${{ matrix.archive }}
+            ${{ matrix.archive }}.sha256
+          retention-days: 3
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e57410521cd2caa0d9562ac08 # v4.1.4
+        with:
+          merge-multiple: true
+
+      - name: Install chlog for release notes
+        run: |
+          CRATE=$(curl -s https://crates.io/api/v1/crates/chlog | python3 -c "import sys,json;print(json.load(sys.stdin)['max_version'])")
+          cargo install chlog --version "$CRATE" --locked
+
+      - name: Extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          chlog check
+          chlog extract "$VERSION" > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a18128b # v2.2.2
+        with:
+          body_path: /tmp/notes.md
+          files: |
+            jev-*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
