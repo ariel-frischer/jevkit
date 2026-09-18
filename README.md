@@ -171,15 +171,6 @@ message, path, and help. Text mode prints findings to stdout so piping to `jq`
 stays safe. Shell completions and a man page are behind the hidden `completions`
 subcommand, generated at build time alongside the binary.
 
-### `jev ask` inline question sets
-
-```bash
-jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
-```
-
-`--question-set` passes a question set inline as a YAML or JSON string, no file
-needed. `jev lint --question-set` works the same way.
-
 ### `jev auth`
 
 ```bash
