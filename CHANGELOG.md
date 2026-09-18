@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Cargo version now matches the v0.1.0 release tag
+- Crate version aligned with the release tag
 
 [Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ariel-frischer/jevkit/compare/v0.1.0...v0.2.0
