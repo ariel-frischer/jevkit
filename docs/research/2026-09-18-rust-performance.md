@@ -145,11 +145,9 @@ answers); answer values differed between calls but the baseline itself varies
 across calls by the same spread (server-side sampling), so no client
 regression is indicated. The compact wire body, derived from the dry-run
 Request on both binaries, hashes identically
-(sha256 f24836...70cc), which pins the bytes reqwest will send via
-. The optimized binary is also installed to ~/.local/bin via
-cargo build --release
-install -m 0755 target/release/jev /home/ari/.local/bin/jev
-Installed /home/ari/.local/bin/jev (md5 matches the fresh build).
+(sha256 f24836...70cc), which pins the bytes reqwest will send for the same
+Request value. The optimized binary is also installed to ~/.local/bin via
+`make install-global` (md5 matches the fresh build).
 
 Adversarial inputs all behave identically: empty state (lint error), single
 char, 5000 newlines, and control-character torture text (JSON escaping
