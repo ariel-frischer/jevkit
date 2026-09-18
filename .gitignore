@@ -38,3 +38,4 @@ skills-lock.json
 
 # Agent worktrees
 .worktrees/
+tapes/

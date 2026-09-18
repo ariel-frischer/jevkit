@@ -84,8 +84,9 @@ enum Command {
     #[command(hide = true)]
     Init {
         /// Provider to configure (skips the provider prompt). `custom`
-        /// combines with `JEV_INIT_BASE` (default openrouter) for the keyring
-        /// slot, or leaves it to the interactive prompt.
+        /// combines with `JEV_INIT_ENDPOINT` (the decisions URL) and
+        /// `JEV_INIT_SLOT` (default openrouter) to run fully
+        /// non-interactively, or prompts for what is missing.
         #[arg(long, value_name = "NAME")]
         provider: Option<String>,
 
@@ -651,9 +652,10 @@ fn cmd_init(provider_flag: Option<String>, no_key: bool) -> Result<()> {
     // which may never live in argv (jev init is meant to be run by a human
     // when it can be).
     if provider_flag.as_deref() == Some("custom") {
-        bail!(
-            "--provider custom needs a terminal to enter the endpoint URL, \
-             or set JEV_INIT_ENDPOINT"
+        return init_custom_from_env(
+            std::env::var("JEV_INIT_ENDPOINT").ok(),
+            std::env::var("JEV_INIT_SLOT").ok(),
+            no_key,
         );
     }
 
@@ -733,6 +735,30 @@ fn print_init_outro(provider_name: &str) {
 
 /// Finish setup for a custom endpoint: validate the URL, write `provider`
 /// plus `endpoint`, and prompt for the key if wanted.
+/// Non-interactive custom setup: `endpoint` comes from JEV_INIT_ENDPOINT, and
+/// the credential slot from JEV_INIT_SLOT. Slot defaults to the first preset
+/// (openrouter), the same default the interactive flow offers first. An unset
+/// or empty endpoint keeps the historical fail-fast, so a genuinely missing
+/// variable is never silently swallowed.
+fn init_custom_from_env(
+    endpoint: Option<String>,
+    slot: Option<String>,
+    no_key: bool,
+) -> Result<()> {
+    let url = endpoint
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .context(
+            "--provider custom needs a terminal to enter the endpoint URL, \
+             or set JEV_INIT_ENDPOINT",
+        )?;
+    let base = match slot.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+        Some(slot) => auth::provider_by_name(&slot)?,
+        None => auth::PROVIDERS[0],
+    };
+    cmd_init_custom(&url, base, no_key)
+}
+
 /// Custom endpoint chosen interactively: ask which preset's keyring slot and
 /// env var the key belongs to (the URL is transport, the credential naming is
 /// what matters), then the URL itself.
@@ -959,6 +985,86 @@ mod cli_tests {
         assert!(validate_https_url("https://example.com/api/alpha/decisions").is_ok());
         assert!(validate_https_url("http://example.com/x").is_err());
         assert!(validate_https_url("not a url").is_err());
+    }
+
+    /// Serialize tests that mutate the process-global XDG_CONFIG_HOME.
+    fn with_scratch_xdg(f: impl FnOnce(&std::path::Path)) {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "jev-init-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("jev")).unwrap();
+        let prev = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        f(&dir);
+        match prev {
+            Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// JEV_INIT_ENDPOINT is actually consumed: with the var set and --no-key,
+    /// the non-interactive custom flow reaches config writing, and the config
+    /// file carries both the provider and the endpoint. Slots default to the
+    /// first preset (openrouter), same as interactive.
+    #[test]
+    fn init_custom_endpoint_var_reaches_config_write() {
+        with_scratch_xdg(|dir| {
+            init_custom_from_env(
+                Some("https://my-jev.example.com/api/alpha/decisions".into()),
+                None,
+                true, // --no-key, so no keyring access
+            )
+            .expect("env-var driven custom init should succeed");
+            let cfg = std::fs::read_to_string(dir.join("jev").join("config.toml")).unwrap();
+            assert!(cfg.contains("provider = \"openrouter\""), "{cfg}");
+            assert!(
+                cfg.contains("endpoint = \"https://my-jev.example.com/api/alpha/decisions\""),
+                "{cfg}"
+            );
+        });
+    }
+
+    /// An explicit JEV_INIT_SLOT chooses the credential slot's name in config.
+    #[test]
+    fn init_custom_slot_var_names_provider_in_config() {
+        with_scratch_xdg(|dir| {
+            init_custom_from_env(
+                Some("https://my-jev.example.com/api/alpha/decisions".into()),
+                Some("typesafe".into()),
+                true,
+            )
+            .expect("slot-driven init should succeed");
+            let cfg = std::fs::read_to_string(dir.join("jev").join("config.toml")).unwrap();
+            assert!(cfg.contains("provider = \"typesafe\""), "{cfg}");
+        });
+    }
+
+    /// Unset or empty JEV_INIT_ENDPOINT keeps the fail-fast, naming the var.
+    #[test]
+    fn init_custom_missing_endpoint_var_bails_with_hint() {
+        let err = init_custom_from_env(None, None, true).unwrap_err();
+        assert!(err.to_string().contains("JEV_INIT_ENDPOINT"), "{err}");
+        let err = init_custom_from_env(Some("   ".into()), None, true).unwrap_err();
+        assert!(err.to_string().contains("JEV_INIT_ENDPOINT"), "{err}");
+    }
+
+    /// An unknown slot name is rejected like any provider name lookup.
+    #[test]
+    fn init_custom_unknown_slot_is_rejected() {
+        let err = init_custom_from_env(
+            Some("https://my-jev.example.com/api/alpha/decisions".into()),
+            Some("not-a-provider".into()),
+            true,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("unknown provider"), "{err}");
     }
 
     #[test]
