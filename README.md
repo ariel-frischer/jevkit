@@ -18,11 +18,36 @@ $ echo "The deploy script drops the production database with no confirmation." \
 
 ## Why this exists
 
-Calling the API is easy: one POST, three question types. What is hard is
-writing questions that produce useful answers, because **the API accepts and
-bills for questions that cannot possibly inform you**.
+Calling the decisions API is not hard: one POST, three question types. You can
+do it with `curl`. So the bar for a tool is whether it removes work that
+actually costs something. Three things do.
 
-All three of these return HTTP 200 and cost real money:
+### 1. Less to write per call
+
+Otherwise every call means re-emitting the endpoint, the auth header, the model
+string, and the full typed envelope. For an agent that is output tokens spent
+on structure rather than on the question:
+
+```text
+raw JSON envelope   308 chars
+terse YAML          198 chars   36% less
+```
+
+To be clear about what this does *not* do: the terse form expands back into the
+same JSON before sending, so the wire payload and the API cost are identical.
+The saving is in what you write, not in what you are billed for.
+
+Getting the envelope wrong has its own cost, and the CLI makes each of these
+structurally impossible: posting to `/v1/chat/completions` (Jev rejects it),
+omitting `criteria` on a `choice` (HTTP 400), and reading a `noul` answer as a
+boolean, which makes every answer "yes" and still looks like a working
+classifier.
+
+### 2. Validation before you are billed
+
+This is the part no other wrapper does, and the reason the tool is worth
+installing. **The API accepts and charges for questions that cannot inform
+you.** All three of these return HTTP 200:
 
 | Question | What comes back | Why it is useless |
 |---|---|---|
@@ -30,8 +55,8 @@ All three of these return HTTP 200 and cost real money:
 | `choice` with one option | that option at probability `1.0` | The answer was forced |
 | Criteria that restate the label | a plausible-looking label | See below |
 
-That last one is the dangerous case, because the result looks fine. On
-identical input, with the option list unchanged, only the descriptions altered:
+The last case is the dangerous one, because the result looks fine. On identical
+input, with the option list unchanged and only the descriptions altered:
 
 ```text
 criteria: {"analogy": "analogy", ...}                  -> analogy         (0.75)
@@ -41,7 +66,26 @@ criteria: {"analogy": "The conclusion transfers from
 
 The verdict inverted. **Criteria text is not documentation, it is the prompt.**
 
-`jev lint` catches all of this offline, before you spend anything.
+No schema catches any of this. `jev lint` does, offline, before you spend
+anything.
+
+### 3. Fast where speed is actually available
+
+Honest accounting, measured against the live endpoint:
+
+| Stage | Time |
+|---|---|
+| API call (TTFB) | ~273 ms |
+| `jev lint`, including process spawn | **0.54 ms** |
+| YAML parse | ~0.16 ms |
+
+Rust does not make `ask` faster, and nothing else would either: the network is
+99.9% of it, and call latency varied 173-868 ms across repeated runs, which
+dwarfs anything local. A Jev CLI sold on request-path speed is selling noise.
+
+What Rust buys is a dependency-free static binary and a `lint` that makes no
+network call at all, fast enough to run over a large question set in a
+pre-commit hook. That is the one place the speed is real.
 
 ## Install
 
@@ -160,26 +204,21 @@ but probably not what you meant.
 
 ## Performance
 
-Measured against the live endpoint on this machine:
+See [Why this exists](#3-fast-where-speed-is-actually-available) for the
+numbers. The short version: the network is ~273 ms and everything local is
+under 0.1% of that, so only `lint`, which makes no call, is meaningfully fast.
 
-| Stage | Time |
-|---|---|
-| API call (TTFB) | ~273 ms |
-| `jev lint`, including process spawn | **0.54 ms** |
-| YAML parse | ~0.16 ms |
-| JSON parse | ~0.0015 ms |
+One thing that *does* move the needle: Jev answers every question in a request
+in parallel. Measured on the same passage, ten questions were no slower than
+one, for 39% more cost:
 
-Local work is under 0.1% of a network call, so `ask` is dominated entirely by
-the API and no amount of local optimization changes it. Call latency varied
-173-868 ms across repeated runs, which is far more than anything local.
+| Questions | Median latency | Cost |
+|---|---|---|
+| 1 | 266 ms | $0.0000120 |
+| 10 | 230 ms | $0.0000167 |
 
-`lint` is the exception and the reason the tool is fast where it matters: it
-makes no network call at all, so linting is bounded only by local work. It is
-cheap enough for a pre-commit hook over a large question set.
-
-Batching also matters more than any local concern: Jev answers every question
-in a request in parallel, so one request with ten questions costs about one
-round trip.
+So batch questions into one request rather than looping. Ten thin calls would
+have cost ten round trips and ten times the base overhead.
 
 ## Notes on the API
 
