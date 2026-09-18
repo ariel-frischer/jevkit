@@ -17,12 +17,20 @@ probabilities, labels, and scores.
 The binary is called `jev`.
 
 ```console
-$ echo "The deploy script drops the production database with no confirmation." \
-    | jev ask -q severity.yaml
+$ jev ask -q severity.yaml "The deploy script drops the production database with no confirmation."
 {
   "risky": 0.96,
   "severity": "high",
   "urgency": 2.82
+}
+```
+
+No file, either: a question set passed inline is a one-liner.
+
+```console
+$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?"}}' "jumping into a volcano"
+{
+  "risky": 0.97
 }
 ```
 
