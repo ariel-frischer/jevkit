@@ -13,6 +13,8 @@
 
 </div>
 
+[TypeSafe's Jev](https://docs.typesafe.ai) returns typed decisions instead of prose. This CLI asks Jev questions about a passage and prints probabilities, labels, and scores.
+
 ## Install
 
 One line (Linux and macOS, no Rust toolchain needed, checksum verified):
