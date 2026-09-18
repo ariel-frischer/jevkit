@@ -167,6 +167,18 @@ a 25k-word state): outputs identical, and the optimized build measured
 with the near-limit state reported 25,453 real input tokens against the
 32,000 limit, and the local char/4 estimate agreed within a few percent.
 
+**Property-based differential (fifth round):** 200 randomly generated
+question-sets (grammar-fuzzed across terse/canonical forms, malformed
+criteria included) crossed with 5 randomized states (words, escape/unicode
+torture, newline-only, small): all 1,000 `ask --dry-run` combinations and all
+200 `lint --json` runs byte-identical against the pre-change baseline.
+49 of the 200 property sets produced at least one lint finding, so the
+differential covered both finding-heavy and clean paths.
+
+README acceptance claims re-verified against the current build: the
+`jev lint` figure (0.54 ms claimed) measures 0.5445 ms on the optimized
+binary, and `make check` remains green.
+
 ## References
 
 - <https://doc.rust-lang.org/cargo/reference/profiles.html> for profile knobs.
