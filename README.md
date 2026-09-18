@@ -25,7 +25,7 @@ before you spend anything on a call.
 curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
 ```
 
-`cargo install --path .` works too. See [Installation details](#installation-details) for build-from-source, version overrides, Windows/WSL, and the agent skill.
+More ways to install: see [Installation details](#installation-details).
 
 ## Usage
 
