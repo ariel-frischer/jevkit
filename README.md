@@ -25,15 +25,7 @@ before you spend anything on a call.
 curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/ariel-frischer/jevkit.git
-cd jevkit && make install-global && jev auth login
-```
-
-`cargo install --path .` works too. See [Installation details](#installation-details) for Windows, version
-overrides, and the agent skill.
+`cargo install --path .` works too. See [Installation details](#installation-details) for build-from-source, version overrides, Windows/WSL, and the agent skill.
 
 ## Usage
 
@@ -92,16 +84,7 @@ tool does not claim otherwise.
 
 ## Installation details
 
-Or, if you don't want Rust at all:
-
-```bash
-JEV_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
-```
-
-It downloads the matching prebuilt binary from GitHub Releases (linux
-x86_64/aarch64, macOS x86_64/aarch64), verifies the SHA-256 checksum, backs up an
-existing install, and warns if `~/.local/bin` is not on your `PATH`. Override the
-version with `JEV_VERSION=v0.1.0`.
+### Build from source
 
 ```bash
 git clone https://github.com/ariel-frischer/jevkit.git
@@ -110,11 +93,17 @@ make install-global      # builds and installs ~/.local/bin/jev
 jev auth login           # store a key in the OS keyring
 ```
 
-`cargo install --path .` works too. Requires a Rust toolchain.
+### Installer internals
 
-**Compatibility**: linux x86_64/aarch64 and macOS x86_64/aarch64 (glibc-based
-linux, e.g. Ubuntu 20.04+, Debian 11+, glibc ≥ 2.31; macOS 11+). Windows needs
-WSL.
+It downloads the matching prebuilt binary from GitHub Releases (linux
+x86_64/aarch64, macOS x86_64/aarch64), verifies the SHA-256 checksum, backs up an
+existing install, and warns if `~/.local/bin` is not on your `PATH`. Override the
+version with `JEV_VERSION=v0.1.0`.
+
+### Compatibility
+
+linux x86_64/aarch64 and macOS x86_64/aarch64 (glibc-based linux, e.g. Ubuntu
+20.04+, Debian 11+, glibc ≥ 2.31; macOS 11+). Windows needs WSL.
 
 ### The agent skill
 
