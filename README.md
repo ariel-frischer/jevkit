@@ -89,11 +89,42 @@ pre-commit hook. That is the one place the speed is real.
 
 ## Install
 
+### The CLI
+
 ```bash
-cargo install --path .
-# or
-make install-global
+git clone git@gitlab.com:ariel-frischer/jevkit.git
+cd jevkit
+make install-global      # builds and installs ~/.local/bin/jev
+jev auth login           # store a key in the OS keyring
 ```
+
+`cargo install --path .` works too. Requires a Rust toolchain.
+
+### The agent skill
+
+`.skills/jevkit/` is an [agent skill](https://skills.sh/) that teaches a coding
+agent to drive the CLI, including the failure modes that are easy to hit.
+
+While this repository is private, install it by symlink so repository edits stay
+live:
+
+```bash
+ln -s "$PWD/.skills/jevkit" ~/.agents/skills/jevkit
+ln -s ../../.agents/skills/jevkit ~/.claude/skills/jevkit   # if you use Claude Code
+npx skills ls -g | grep jevkit                              # confirm registration
+```
+
+One symlink covers Claude Code, Codex, Gemini CLI, OpenCode, and Zed, since they
+all read `~/.agents/skills`.
+
+Were the repository public on GitHub, the usual one-liner would apply:
+
+```bash
+npx skills add ariel-frischer/jevkit
+```
+
+`npx skills add` resolves GitHub repositories, so it cannot reach a private
+GitLab project. Use the symlink above.
 
 ## Commands
 
