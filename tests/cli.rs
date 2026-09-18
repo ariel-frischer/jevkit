@@ -254,8 +254,9 @@ fn ask_inline_question_set_appears_in_dry_run_payload() {
 /// set, same as it would from a file.
 #[test]
 fn lint_inline_question_set_reports_findings() {
-    // One option is an error: the answer cannot inform anyone.
-    let inline = r#"{"pick":{"type":"choice","options":["only"],"instructions":"Pick one"}}"#;
+    // One option is an error: the answer cannot inform anyone. Criteria are
+    // required for the set to parse at all.
+    let inline = r#"{"pick":{"type":"choice","options":["only"],"criteria":"Choose one","instructions":"Pick one"}}"#;
     let assert = Command::cargo_bin("jev")
         .expect("jev binary builds")
         .args(["lint", "--question-set", inline])
