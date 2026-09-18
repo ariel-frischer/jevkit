@@ -42,9 +42,8 @@ fn lint_clean_file_json_outputs_empty_array() {
         .stdout(predicates::str::contains("[]"));
 }
 
-/// `bad-questions.yaml` trips only Warning-severity findings, so under the
-/// current contract it exits 0 (warnings are advisory; `--deny-warnings`
-/// makes them fatal).
+/// `bad-questions.yaml` trips only Warning-severity findings, which exit 2
+/// (warnings-only) under the documented contract; `--strict` makes them 1.
 #[test]
 fn lint_bad_file_warnings_exit_zero() {
     Command::cargo_bin("jev")
@@ -52,8 +51,7 @@ fn lint_bad_file_warnings_exit_zero() {
         .args(["lint", "examples/bad-questions.yaml"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
-        .success()
-        .code(0);
+        .code(2);
 }
 
 /// `--deny-warnings` makes the same warnings fatal, exit 1.
@@ -107,7 +105,7 @@ fn lint_bad_file_json_includes_rule_field() {
         .args(["lint", "--json", "examples/bad-questions.yaml"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
-        .success()
+        .code(2)
         .stdout(predicates::str::is_match("\"rule\": \"").unwrap());
 }
 
@@ -256,14 +254,14 @@ fn ask_inline_question_set_appears_in_dry_run_payload() {
 fn lint_inline_question_set_reports_findings() {
     // A one-option choice parses fine but trips the single-option rule. The
     // option needs a criteria mapping (option -> description) to be legal.
-    // single-option is a warning, so exit is still zero.
+    // single-option is a warning, so the exit is warnings-only (2).
     let inline = r#"{"pick":{"type":"choice","instructions":"State whether this is risky","criteria":{"only":"The only choice"}}}"#;
     let output = Command::cargo_bin("jev")
         .expect("jev binary builds")
         .args(["lint", "--question-set", inline])
         .output()
         .expect("lint runs");
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("single-option"),
