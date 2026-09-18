@@ -138,9 +138,20 @@ because argv is readable by other processes and lands in shell history.
 
 ## Writing questions
 
-Both spellings are accepted. The terse one exists because the API envelope is
-verbose: on a two-question payload, 59% of the JSON was structure
-(`"type"`, `"instructions"`, `"criteria"`, nesting) and only 41% was content.
+**YAML or JSON, anywhere a question set is accepted**, by file or on stdin. The
+format is detected automatically, with no flag: JSON is tried first, because
+every JSON document is also valid YAML but the JSON parser gives better errors.
+
+```bash
+jev ask -q questions.yaml "text"
+jev ask -q questions.json "text"
+cat questions.json | jev lint
+```
+
+Within either format there are two spellings, terse and canonical. The terse
+one exists because the API envelope is verbose: on a two-question payload, 59%
+of the JSON was structure (`"type"`, `"instructions"`, `"criteria"`, nesting)
+and only 41% was content.
 
 ```yaml
 # Terse: the primitive is the key, its value is the instructions.
@@ -187,6 +198,8 @@ q:
 | Rule | Severity | Catches |
 |---|---|---|
 | `missing-criteria` | error | `choice`/`score` without criteria, which the API rejects |
+| `non-string-criteria` | error | A `choice` description YAML read as a number or boolean |
+| `non-string-level` | error | A `score` level YAML read as a number or boolean |
 | `empty-instructions` | error | A question with nothing to judge |
 | `context-overflow` | error | A payload that cannot fit the 32k-token limit under any tokenization |
 | `degenerate-criteria` | warning | Criteria that restate the label |

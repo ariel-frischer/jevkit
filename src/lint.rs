@@ -296,6 +296,22 @@ fn lint_choice(path: &str, criteria: &BTreeMap<String, Guidance>, findings: &mut
         findings,
     );
 
+    // YAML reads an unquoted `1.5` or `true` as a number or boolean, and the
+    // API rejects a non-string description: 400 "questions.q.criteria.low:
+    // Invalid input".
+    for (label, desc) in criteria {
+        if desc.is_number() || desc.is_boolean() {
+            findings.push(
+                Finding::error(
+                    "non-string-criteria",
+                    format!("{cpath}.{label}"),
+                    format!("description for {label:?} is {desc}, not text; the API rejects it"),
+                )
+                .with_help("Quote the value, and better still describe when this option applies."),
+            );
+        }
+    }
+
     let has_escape = criteria
         .keys()
         .any(|k| ESCAPE_OPTIONS.contains(&k.to_lowercase().trim()));
@@ -356,6 +372,22 @@ fn lint_score(path: &str, criteria: &[Guidance], findings: &mut Vec<Finding>) {
                 format!("{cpath}[{i}]"),
                 "level description is empty",
             ));
+        } else if level.is_number() || level.is_boolean() {
+            // A bare `1.5` in YAML deserializes to a JSON number, and the API
+            // rejects a non-string level outright: 400 "questions.q.criteria.1:
+            // Invalid input". This is a hard error, unlike a quoted "1.5",
+            // which the API accepts and which is merely poor practice.
+            findings.push(
+                Finding::error(
+                    "non-string-level",
+                    format!("{cpath}[{i}]"),
+                    format!("level {i} is {text}, not text; the API rejects a non-string level"),
+                )
+                .with_help(
+                    "YAML reads a bare 1.5 or true as a number or boolean. Quote it, and better \
+                     still describe what the level means.",
+                ),
+            );
         } else if text.trim().parse::<f64>().is_ok() {
             findings.push(
                 Finding::warn(
@@ -539,6 +571,78 @@ mod tests {
                 .count(),
             3
         );
+    }
+
+    /// Quoted numerals are accepted by the API, verified live, so they warn
+    /// rather than block.
+    #[test]
+    fn quoted_numeric_levels_only_warn() {
+        let qs = questions(json!({
+            "q": {
+                "type": "score",
+                "instructions": "Rate the urgency of this ticket",
+                "criteria": ["0", "1", "2"]
+            }
+        }));
+        assert!(!lint_questions(&qs)
+            .iter()
+            .any(|f| f.severity == Severity::Error));
+    }
+
+    /// YAML reads a bare `1.5` as a number, and the API rejects it:
+    /// 400 "questions.q.criteria.1: Invalid input". Must be an error, not a
+    /// warning.
+    #[test]
+    fn unquoted_numeric_level_is_an_error() {
+        let qs = questions(json!({
+            "q": {
+                "type": "score",
+                "instructions": "Rate the confidence level described",
+                "criteria": ["no", 1.5, "yes"]
+            }
+        }));
+        let found = lint_questions(&qs);
+        assert!(rules(&found).contains(&"non-string-level"));
+        assert!(found
+            .iter()
+            .any(|f| f.rule == "non-string-level" && f.severity == Severity::Error));
+    }
+
+    /// Same hole on the choice side: 400 "questions.q.criteria.low: Invalid
+    /// input".
+    #[test]
+    fn unquoted_numeric_choice_description_is_an_error() {
+        let qs = questions(json!({
+            "q": {
+                "type": "choice",
+                "instructions": "Which severity applies to this passage?",
+                "criteria": {"low": 1.5, "high": "Permanent data loss", "none": "Nothing applies"}
+            }
+        }));
+        let found = lint_questions(&qs);
+        assert!(found
+            .iter()
+            .any(|f| f.rule == "non-string-criteria" && f.severity == Severity::Error));
+    }
+
+    /// The crate is `serde_norway` for exactly this reason: a bare `NO` key
+    /// must stay the string "NO" and not become `false`.
+    #[test]
+    fn norway_problem_does_not_corrupt_labels() {
+        let qs = crate::input::parse_questions(
+            "q:\n  choice: Which country is named?\n  options:\n    NO: Norway is named\n    none: No country is named\n",
+        )
+        .unwrap();
+        match &qs["q"] {
+            Question::Choice { criteria, .. } => {
+                assert!(
+                    criteria.contains_key("NO"),
+                    "got keys: {:?}",
+                    criteria.keys().collect::<Vec<_>>()
+                );
+            }
+            other => panic!("expected choice, got {other:?}"),
+        }
     }
 
     #[test]
