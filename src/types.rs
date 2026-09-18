@@ -127,6 +127,33 @@ pub struct Usage {
     pub cost: f64,
 }
 
+/// A `io::Write` sink that discards bytes and counts them.
+///
+/// Lets lint measure the serialized payload without materializing it: the
+/// whole-request estimate can be over a state the size of a book, and building
+/// a full `String` copy of that just to throw it away is the single largest
+/// allocation on the `ask` path.
+pub struct CountingSink(pub usize);
+
+impl std::io::Write for CountingSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Serialize a value and report its byte length without keeping it.
+pub fn serialized_len<T: serde::Serialize>(value: &T) -> usize {
+    let mut sink = CountingSink(0);
+    // Serialization into an always-succeeding sink cannot fail; the only
+    // `Err` here is an unsupported Serialize impl, and serde_json's is not.
+    let _ = serde_json::to_writer(&mut sink, value);
+    sink.0
+}
+
 /// A decisions response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
@@ -140,10 +167,12 @@ pub struct Response {
     pub provider: String,
 }
 
-/// A rough character-based token estimate, for checking a request against
-/// [`MAX_CONTEXT_TOKENS`] before spending a call.
-pub fn estimate_tokens(s: &str) -> usize {
-    s.len() / 4 + 1
+/// A rough character-based token estimate from a byte length, for checking a
+/// request against [`MAX_CONTEXT_TOKENS`] before spending a call. The caller
+/// supplies the serialized byte length; use [`serialized_len`] to measure it
+/// without building the payload string.
+pub fn estimate_tokens_len(bytes: usize) -> usize {
+    bytes / 4 + 1
 }
 
 #[cfg(test)]

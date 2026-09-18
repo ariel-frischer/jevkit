@@ -23,7 +23,9 @@
 //! Findings are advisory by default: this lints style, and style rules are
 //! heuristics. `--deny warnings` makes them fatal for CI.
 
-use crate::types::{estimate_tokens, Guidance, Question, Request, MAX_CONTEXT_TOKENS};
+use crate::types::{
+    estimate_tokens_len, serialized_len, Guidance, Question, Request, MAX_CONTEXT_TOKENS,
+};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -126,8 +128,11 @@ pub fn lint_request(req: &Request) -> Vec<Finding> {
     // plausible tokenization, and anything merely near the limit is a warning.
     // Being wrong in the warning direction costs a stderr line; being wrong in
     // the error direction costs the user a call they were entitled to make.
-    let payload = serde_json::to_string(req).unwrap_or_default();
-    let tokens = estimate_tokens(&payload);
+    // Serialize to a counting sink instead of a String: a state can be tens
+    // of kilobytes, and building a full copy of the payload just to measure
+    // it was the largest allocation on the ask path.
+    let payload_len = serialized_len(req);
+    let tokens = estimate_tokens_len(payload_len);
     // Even a pathological worst case does not compress below ~1 token per
     // character, so an estimate above 4x the limit cannot possibly fit.
     if tokens > MAX_CONTEXT_TOKENS * 4 {
@@ -407,21 +412,36 @@ fn lint_bare_labels<'a>(
 
 /// Flatten guidance to searchable text. Objects and arrays are accepted by the
 /// API, so lint rules have to see through them.
-fn guidance_text(g: &Guidance) -> String {
+///
+/// Borrows the inner text where possible (`Cow`) instead of rebuilding a
+/// String; the common case is a plain string and that costs no allocation.
+fn guidance_text(g: &Guidance) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
     match g {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Array(items) => items
-            .iter()
-            .map(guidance_text)
-            .collect::<Vec<_>>()
-            .join(" "),
-        serde_json::Value::Object(map) => map
-            .values()
-            .map(guidance_text)
-            .collect::<Vec<_>>()
-            .join(" "),
-        serde_json::Value::Null => String::new(),
-        other => other.to_string(),
+        serde_json::Value::String(s) => Cow::Borrowed(s),
+        serde_json::Value::Array(items) => match items.len() {
+            0 => Cow::Borrowed(""),
+            1 => guidance_text(&items[0]),
+            _ => Cow::Owned(
+                items
+                    .iter()
+                    .map(|v| guidance_text(v).into_owned())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+        },
+        serde_json::Value::Object(map) => match map.len() {
+            0 => Cow::Borrowed(""),
+            1 => guidance_text(map.values().next().unwrap()),
+            _ => Cow::Owned(
+                map.values()
+                    .map(|v| guidance_text(v).into_owned())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+        },
+        serde_json::Value::Null => Cow::Borrowed(""),
+        other => Cow::Owned(other.to_string()),
     }
 }
 
