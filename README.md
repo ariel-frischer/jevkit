@@ -129,13 +129,7 @@ npx skills ls -g | grep jevkit   # confirm registration
 One registration covers Claude Code, Codex, Gemini CLI, OpenCode, and Zed,
 since they all read `~/.agents/skills`.
 
-When developing the skill inside a clone of this repository, install it by
-symlink so repository edits stay live:
-
-```bash
-ln -s "$PWD/.skills/jevkit" ~/.agents/skills/jevkit
-ln -s ../../.agents/skills/jevkit ~/.claude/skills/jevkit   # if you use Claude Code
-```
+When contributing, install the skill by symlink so repository edits stay live.
 
 ## Commands
 

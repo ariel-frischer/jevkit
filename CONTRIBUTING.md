@@ -46,3 +46,12 @@ Use [GitHub Issues](https://github.com/ariel-frischer/jevkit/issues). Include:
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
 
+
+## Agent skill development
+
+To keep the repo skill live in your agent while developing:
+
+```bash
+ln -s "$PWD/.skills/jevkit" ~/.agents/skills/jevkit
+ln -s ../../.agents/skills/jevkit ~/.claude/skills/jevkit   # if you use Claude Code
+```
