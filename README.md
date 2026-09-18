@@ -34,7 +34,7 @@ Install, one line (Linux and macOS, no Rust toolchain needed, checksum verified)
 curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
 ```
 
-Or install from source: `git clone https://github.com/ariel-frischer/jevkit.git && cd jevkit && make install-global && jev auth login` — see [Install](#install) for details.
+Or [install from source](#install).
 
 **Built for AI agents too.** `jev` ships with an [agent skill](#the-agent-skill) that teaches a coding agent to drive the CLI install-free from the repo; agents can also consume it via `npx skills add ariel-frischer/jevkit`.
 
