@@ -222,7 +222,7 @@ Exit codes: `0` clean, `1` errors found (or any finding with `--strict`),
 The skill is guidance; `jev` is a separate binary.
 
 ```bash
-git clone git@gitlab.com:ariel-frischer/jevkit.git
+git clone https://github.com/ariel-frischer/jevkit.git
 cd jevkit && make install-global      # installs to ~/.local/bin/jev
 jev auth login                        # store an OpenRouter key in the keyring
 ```

@@ -5,7 +5,7 @@ Thanks for your interest in contributing!
 ## Getting Started
 
 ```bash
-git clone https://gitlab.com/ariel-frischer/jevkit.git
+git clone https://github.com/ariel-frischer/jevkit.git
 cd jevkit
 make install   # Download dependencies
 make build     # Build binary
@@ -30,7 +30,7 @@ make format    # Format code
 
 ## Reporting Issues
 
-Use [GitLab Issues](https://gitlab.com/ariel-frischer/jevkit/issues). Include:
+Use [GitHub Issues](https://github.com/ariel-frischer/jevkit/issues). Include:
 - What you expected vs what happened
 - Steps to reproduce
 - `jevkit version` output

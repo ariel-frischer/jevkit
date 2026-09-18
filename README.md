@@ -102,7 +102,7 @@ pre-commit hook. That is the one place the speed is real.
 ### The CLI
 
 ```bash
-git clone git@gitlab.com:ariel-frischer/jevkit.git
+git clone https://github.com/ariel-frischer/jevkit.git
 cd jevkit
 make install-global      # builds and installs ~/.local/bin/jev
 jev auth login           # store a key in the OS keyring
@@ -115,26 +115,23 @@ jev auth login           # store a key in the OS keyring
 `.skills/jevkit/` is an [agent skill](https://skills.sh/) that teaches a coding
 agent to drive the CLI, including the failure modes that are easy to hit.
 
-While this repository is private, install it by symlink so repository edits stay
-live:
+Or install the bundled agent skill as a one-liner:
+
+```bash
+npx skills add ariel-frischer/jevkit
+npx skills ls -g | grep jevkit   # confirm registration
+```
+
+One registration covers Claude Code, Codex, Gemini CLI, OpenCode, and Zed,
+since they all read `~/.agents/skills`.
+
+When developing the skill inside a clone of this repository, install it by
+symlink so repository edits stay live:
 
 ```bash
 ln -s "$PWD/.skills/jevkit" ~/.agents/skills/jevkit
 ln -s ../../.agents/skills/jevkit ~/.claude/skills/jevkit   # if you use Claude Code
-npx skills ls -g | grep jevkit                              # confirm registration
 ```
-
-One symlink covers Claude Code, Codex, Gemini CLI, OpenCode, and Zed, since they
-all read `~/.agents/skills`.
-
-Were the repository public on GitHub, the usual one-liner would apply:
-
-```bash
-npx skills add ariel-frischer/jevkit
-```
-
-`npx skills add` resolves GitHub repositories, so it cannot reach a private
-GitLab project. Use the symlink above.
 
 ## Commands
 
@@ -328,9 +325,7 @@ have cost ten round trips and ten times the base overhead.
 
 ## Continuous integration
 
-GitHub Actions workflow files exist in the repository. They are code only, so
-they are committed even though no public repository has been created yet; they
-start running the moment one is.
+GitHub Actions runs on push and pull request.
 
 | Job | Runs |
 |---|---|
