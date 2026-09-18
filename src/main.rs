@@ -128,6 +128,11 @@ struct AskArgs {
     #[arg(long, value_name = "ID")]
     session_id: Option<String>,
 
+    /// Inline question set as a YAML or JSON string. Takes precedence over
+    /// --questions; useful for one-off calls without a temp file.
+    #[arg(long, value_name = "QUESTIONS")]
+    question_set: Option<String>,
+
     /// Append this call to the usage ledger. Optional path; defaults to
     /// $XDG_STATE_HOME/jev/usage.jsonl (~/.local/state/jev/usage.jsonl).
     /// Can also be enabled with JEV_LOG_FILE=1 for the default path.
@@ -144,6 +149,10 @@ struct LintArgs {
     /// Treat warnings as failures. Intended for CI.
     #[arg(long)]
     deny_warnings: bool,
+
+    /// Inline question set as a YAML or JSON string.
+    #[arg(long, value_name = "QUESTIONS")]
+    question_set: Option<String>,
 
     /// Emit findings as JSON.
     #[arg(long)]
@@ -290,9 +299,10 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         bail!("both the questions and the state would come from stdin; pass one of them as a file or an argument");
     }
 
-    let question_src = match &args.questions {
-        Some(path) => read_source(Some(path))?,
-        None => bail!("no questions given; pass --questions FILE"),
+    let question_src = match (&args.questions, args.question_set.as_deref()) {
+        (Some(path), _) => read_source(Some(path))?,
+        (_, Some(inline)) => inline.to_string(),
+        (None, None) => bail!("no questions given; pass --questions FILE"),
     };
     let questions = input::parse_questions(&question_src)?;
 
@@ -452,7 +462,10 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
 }
 
 fn cmd_lint(args: LintArgs) -> Result<()> {
-    let src = read_source(args.file.as_deref())?;
+    let src = match args.question_set.as_deref() {
+        Some(inline) => inline.to_string(),
+        None => read_source(args.file.as_deref())?,
+    };
     let questions = input::parse_questions(&src)?;
     let findings = lint::lint_questions(&questions);
 
