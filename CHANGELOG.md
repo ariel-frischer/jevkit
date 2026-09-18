@@ -16,4 +16,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions workflow files for fmt, clippy, offline tests, build, an MSRV 1.82 job, and a weekly cargo-deny audit (workflows are in-repo; no public repository yet)
 - Lint ergonomics: `jev lint --json`, documented exit codes (0 clean, 1 errors, 2 warnings-only), `--strict`, and shell completions
 - Documentation for the CI workflows and the lint ergonomics contract
+- ANSI logo banner on bare jev --version; script-parsed version output stays plain
 
