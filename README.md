@@ -146,8 +146,13 @@ jev ask -q questions.yaml "some text"          # state as an argument
 
 jev ask -q questions.yaml --dry-run            # print the payload, send nothing
 jev ask -q questions.yaml --raw                # full response with usage and cost
+```
 
-jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
+```console
+$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is a person taking this action putting themselves in real, physical danger?"}}' "jumping into a volcano"
+{
+  "risky": 0.97
+}
 ```
 
 `--question-set` passes a question set inline as a YAML or JSON string, no file
