@@ -13,11 +13,15 @@
 
 </div>
 
-A CLI for [TypeSafe's Jev](https://docs.typesafe.ai), a model that returns
-typed decisions instead of prose. Ask it questions about a passage and get back
-probabilities, labels, and scores.
+## Install
 
-The binary is called `jev`.
+One line (Linux and macOS, no Rust toolchain needed, checksum verified):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
+```
+
+Or [install from source](#install).
 
 ```console
 $ jev ask -q severity.yaml "The deploy script drops the production database with no confirmation."
@@ -28,16 +32,6 @@ $ jev ask -q severity.yaml "The deploy script drops the production database with
 }
 ```
 
-Install, one line (Linux and macOS, no Rust toolchain needed, checksum verified):
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
-```
-
-Or [install from source](#install).
-
-**Built for AI agents too.** `jev` ships with an [agent skill](#the-agent-skill) that teaches a coding agent to drive the CLI install-free from the repo; agents can also consume it via `npx skills add ariel-frischer/jevkit`.
-
 No file, either: a question set passed inline is a one-liner.
 
 ```console
@@ -46,6 +40,8 @@ $ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?
   "risky": 0.97
 }
 ```
+
+**Built for AI agents too.** `jev` ships with an [agent skill](#the-agent-skill) that teaches a coding agent to drive the CLI; agents can also consume it via `npx skills add ariel-frischer/jevkit`.
 
 ## Why this exists
 
