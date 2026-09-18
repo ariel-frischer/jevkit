@@ -149,7 +149,7 @@ jev ask -q questions.yaml --raw                # full response with usage and co
 ```
 
 ```console
-$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is a person taking this action putting themselves in real, physical danger?"}}' "jumping into a volcano"
+$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?"}}' "jumping into a volcano"
 {
   "risky": 0.97
 }
