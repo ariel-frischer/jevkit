@@ -167,6 +167,25 @@ Keys resolve in this order: `--api-key`, then the provider's environment
 variable, then the OS keyring. `auth login` never accepts a key as an argument,
 because argv is readable by other processes and lands in shell history.
 
+### `jev config`
+
+User defaults in `~/.config/jev/config.toml`. Keys: `provider`, `model`, `log`.
+
+```bash
+jev config keys     # what is configurable
+jev config set model typesafe/jev-1.13
+jev config show
+```
+
+Settings layer highest first: flags > `JEV_*` env vars > config.toml >
+built-in defaults.
+
+### Usage ledger
+
+`jev ask --log` appends one JSON line per call (request, response, tokens,
+cost) to `~/.local/state/jev/usage.jsonl`. Opt-in only; failed calls are
+logged too. `config set log <path-or-1>` makes a bare `--log` use it.
+
 ## Writing questions
 
 **YAML or JSON, anywhere a question set is accepted**, by file or on stdin. The
