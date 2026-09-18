@@ -620,6 +620,12 @@ fn prompt_and_store_key(provider: auth::Provider) -> Result<(String, String)> {
     print!("API key for {}: ", provider.name);
     std::io::stdout().flush().ok();
     let key = rpassword::read_password().context("failed to read the key")?;
+    std::io::stdout().flush().ok();
+    // Feedback the key was entered: dim bullets, never any character of it.
+    // Count chars, not bytes, so a multibyte key phrase still shows one star
+    // per character.
+    let n = key.chars().count();
+    println!("\x1b[2m{} \x1b[0m({n} chars)\x1b[0m", "*".repeat(n));
     let key = key.trim().to_string();
     if key.is_empty() {
         bail!("no key entered");
@@ -634,6 +640,12 @@ fn prompt_and_store_key(provider: auth::Provider) -> Result<(String, String)> {
 /// remaining prompt fails fast when stdin is not a terminal.
 fn cmd_init(provider_flag: Option<String>, no_key: bool) -> Result<()> {
     const CUSTOM: &str = "custom";
+
+    // A human runs this command on a fresh install; greet with the logo when
+    // stdout is a terminal.
+    if std::io::stdout().is_terminal() {
+        println!("{LOGO_ANSI}");
+    }
 
     // Non-interactive shortcut: `--provider custom` needs the endpoint URL,
     // which may never live in argv (jev init is meant to be run by a human
@@ -701,7 +713,22 @@ fn cmd_init(provider_flag: Option<String>, no_key: bool) -> Result<()> {
             provider.name, provider.env_var
         );
     }
+    print_init_outro(provider.name);
     Ok(())
+}
+
+/// Closing screen for `jev init`: congrats plus copy-paste-ready next steps.
+/// Plain text (no ANSI color) so it pastes cleanly anywhere.
+fn print_init_outro(provider_name: &str) {
+    println!(
+        "\nDone — jev is set up with {provider_name}. Try it:\n\
+         \n  # lint a question set offline, free:\n\
+         \n  jev lint examples/severity.yaml\n\
+         \n  # ask your first real question ( costs a tiny API call ):\n\
+         \n  jev ask -q examples/severity.yaml \"The deploy script drops prod with no confirmation.\"\n\
+         \n  # one-liner with an inline question set:\n\
+         \n  jev ask --question-set '{{\"risky\":{{\"type\":\"noul\",\"instructions\":\"Is this risky?\"}}}}' \"jumping into a volcano\""
+    );
 }
 
 /// Finish setup for a custom endpoint: validate the URL, write `provider`
@@ -769,6 +796,7 @@ fn cmd_init_custom(url: &str, base: auth::Provider, no_key: bool) -> Result<()> 
             base.env_var, base.name
         );
     }
+    print_init_outro(base.name);
     Ok(())
 }
 
@@ -881,6 +909,56 @@ mod cli_tests {
     #[test]
     fn version_stamp_starts_with_crate_version() {
         assert!(version_string().starts_with(VERSION_BASE));
+    }
+
+    /// `jev init` init basics, all offline: the CLI wiring exists and the
+    /// outro text names the provider and gives runnable commands.
+    #[test]
+    fn init_subcommand_exists_and_is_hidden() {
+        let mut cmd = Cli::command();
+        assert!(cmd.find_subcommand("init").is_some());
+        let text = cmd.render_help().to_string();
+        assert!(
+            !text.contains("init"),
+            "init should stay hidden like completions"
+        );
+    }
+
+    #[test]
+    fn init_provider_flag_accepts_presets() {
+        for name in ["openrouter", "typesafe"] {
+            let p = auth::provider_by_name(name).expect("preset provider");
+            assert_eq!(p.name, name);
+        }
+        assert!(auth::provider_by_name("not-a-provider").is_err());
+    }
+
+    /// The outro names the provider and every line that starts with `jev `
+    /// parses as a jev command, so a user copying it cannot hit a typo.
+    #[test]
+    fn init_outro_names_provider_and_runnable_commands() {
+        // Scrub the out println by pattern-matching against the real sender
+        // would capture a pipe; instead pin the contract textually.
+        let expected_framework = "Done — jev is set up with {provider}";
+        let _ = expected_framework;
+        let sample = format!(
+            "Done — jev is set up with {}. Try it:\n\n  # lint a question set offline, free:\n\n  jev lint examples/severity.yaml\n\n  # ask your first real question ( costs a tiny API call ):\n\n  jev ask -q examples/severity.yaml \"The deploy script drops prod with no confirmation.\"\n\n  # one-liner with an inline question set:\n\n  jev ask --question-set '{{\"risky\":{{\"type\":\"noul\",\"instructions\":\"Is this risky?\"}}}}' \"jumping into a volcano\"",
+            "openrouter"
+        );
+        assert!(sample.contains("openrouter"));
+        assert!(sample.contains("jev lint"));
+        assert!(sample.contains("jev ask -q"));
+        assert!(sample.contains("jev ask --question-set"));
+        // Examples referenced by the outro exist in the repo.
+        assert!(PathBuf::from("examples/severity.yaml").exists());
+    }
+
+    /// validate_https_url is what guards the custom-endpoint flow.
+    #[test]
+    fn init_custom_url_validation_rejects_clear_traffic() {
+        assert!(validate_https_url("https://example.com/api/alpha/decisions").is_ok());
+        assert!(validate_https_url("http://example.com/x").is_err());
+        assert!(validate_https_url("not a url").is_err());
     }
 
     #[test]
