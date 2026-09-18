@@ -297,8 +297,10 @@ main() {
 
     echo "Get started:"
     echo ""
-    echo "    ${BINARY_NAME} auth login   # store your Jev API key"
-    echo "    ${BINARY_NAME} --help       # show available commands"
+    echo "    jev --version"
+    echo "    jev init"
+    echo "    jev auth login"
+    echo "    jev --help"
     echo ""
     echo "Documentation: https://github.com/${GITHUB_REPO}"
     echo ""
