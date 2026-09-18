@@ -103,16 +103,19 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Install chlog for release notes
-        run: |
-          CRATE=$(curl -s https://crates.io/api/v1/crates/chlog | python3 -c "import sys,json;print(json.load(sys.stdin)['max_version'])")
-          cargo install chlog --version "$CRATE" --locked
-
       - name: Extract release notes
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          chlog check
-          chlog extract "$VERSION" > /tmp/notes.md
+          # CHANGELOG.md marks each version as '## [x.y.z] - date'. Pull the
+          # section for this tag and strip the heading links.
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              in_section = ($0 ~ "^## \\[" ver "\\]")
+              if (in_section) next
+            }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          test -s /tmp/notes.md || { echo "No notes found for v$VERSION"; exit 1; }
           cat /tmp/notes.md
 
       - name: Create release
