@@ -4,29 +4,36 @@ stages:
   - build
 
 variables:
-  GOFLAGS: "-buildvcs=false"
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  CARGO_TERM_COLOR: always
 
-.go-cache:
-  variables:
-    GOPATH: $CI_PROJECT_DIR/.go
+.rust-cache:
   cache:
-    key: go-${CI_COMMIT_REF_SLUG}
+    key: cargo-${CI_COMMIT_REF_SLUG}
     paths:
-      - .go/pkg/mod/
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - target/
 
-lint:
+fmt:
   stage: lint
-  image: golang:1.25
-  extends: .go-cache
+  image: rust:1.90
+  extends: .rust-cache
   script:
-    - test -z "$(gofmt -s -l .)"
-    - go vet ./...
+    - rustup component add rustfmt
+    - cargo fmt --check
 
+clippy:
+  stage: lint
+  image: rust:1.90
+  extends: .rust-cache
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets -- -D warnings
 
 changelog-check:
   stage: lint
-  image: golang:1.25
-  extends: .go-cache
+  image: rust:1.90
   script:
     - |
       if command -v chlog >/dev/null 2>&1; then
@@ -36,29 +43,22 @@ changelog-check:
       fi
   allow_failure: true
 
-
+# No API key: every test here is offline by design. Linting and parsing must
+# never require a credential or a network call.
 test:
   stage: test
-  image: golang:1.25
-  extends: .go-cache
+  image: rust:1.90
+  extends: .rust-cache
   script:
-    - go test -race -coverprofile=coverage.out ./...
-    - go tool cover -func=coverage.out
-  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage.out
+    - cargo test --all-targets
 
 build:
   stage: build
-  image: golang:1.25
-  extends: .go-cache
+  image: rust:1.90
+  extends: .rust-cache
   script:
-    - make build VERSION=dev
+    - cargo build --release
   artifacts:
     paths:
-      - bin/
+      - target/release/jev
     expire_in: 7 days
-

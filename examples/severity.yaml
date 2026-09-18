@@ -1,0 +1,19 @@
+# Terse form: the primitive is the key, and its value is the instructions.
+risky:
+  noul: Does the passage describe an irreversible operation that can destroy data?
+
+severity:
+  choice: How severe is the worst outcome the passage describes?
+  options:
+    low: Cosmetic or easily reversed with no lasting effect
+    medium: Recoverable, but requires manual intervention to fix
+    high: Permanent data loss or an outage affecting users
+    none: The passage does not describe an operation with consequences
+
+urgency:
+  score: How soon must someone act on what the passage describes?
+  levels:
+    - Can safely wait for the next planning cycle
+    - Should be handled within the current week
+    - Needs attention today
+    - Requires an immediate response

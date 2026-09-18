@@ -1,0 +1,45 @@
+[package]
+name = "jevkit"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.82"
+description = "Fast Rust CLI for TypeSafe Jev: typed decisions, offline linting"
+authors = ["Ariel Frischer <arielfrischer@gmail.com>"]
+license = "MIT"
+repository = "https://gitlab.com/ariel-frischer/jevkit"
+readme = "README.md"
+keywords = ["jev", "typesafe", "cli", "llm", "decisions"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "jev"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+# serde_yaml is deprecated upstream; serde_norway is the maintained fork.
+serde_norway = "0.9"
+# Blocking client: a CLI makes one request then exits, so an async runtime is
+# pure startup cost. rustls avoids a system OpenSSL dependency.
+reqwest = { version = "0.13", default-features = false, features = [
+    "blocking",
+    "json",
+    "rustls",
+    "rustls-native-certs",
+    "http2",
+] }
+# The default `v1` feature selects the native store per platform:
+# Keychain on macOS, Credential Manager on Windows, Secret Service on Linux.
+keyring = "4.2"
+rpassword = "7.5"
+thiserror = "2.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

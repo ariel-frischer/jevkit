@@ -1,92 +1,97 @@
 # AGENTS.md
 
-## Project Context
+Guidance for agents working in this repository.
 
-jevkit: Fast Rust CLI for TypeSafe Jev: typed decisions, offline linting
+## What this is
 
-- **Language:** Go
-- **Module:** `github.com/demo/jevkit`
-- **Layout:** CLI only
-- **Env prefix:** `JEVKIT`
+`jevkit` is a CLI for TypeSafe's Jev, a model that returns typed decisions
+rather than prose. The binary is `jev`.
 
-## Command Map
+Rust, single binary, three commands: `ask`, `lint`, `auth`.
+
+## Core goals, in priority order
+
+1. **Catch waste before it is billed.** The API accepts and charges for
+   questions that cannot inform anyone: a one-level `score`, a one-option
+   `choice`, criteria that merely restate their label. No schema catches these.
+   `jev lint` is the reason this tool exists; `ask` is the smaller half.
+2. **Never shorten the semantics.** Terse input syntax is fine for the
+   *envelope* and forbidden for the *content*. Criteria text is the prompt.
+   Measured: bare labels chose `analogy` (0.75) where written descriptions
+   chose `popular_opinion` (0.76) on identical input. The verdict inverted.
+3. **Stay honest about speed.** The network is ~273 ms; all local work is under
+   0.1% of that. `lint` is fast because it makes no call, not because Rust
+   parses quickly. Do not put a validation-speed claim in user-facing text.
+4. **Keep the surface small.** Three commands. Every addition needs a reason
+   that survives "could the user just write ten lines of code instead".
+
+## Scope
+
+**In scope**
+
+- `jev ask`: send a question set, print answers
+- `jev lint`: offline schema and semantic validation
+- `jev auth`: keyring-backed credentials
+- YAML and JSON input, in both terse and canonical spellings
+
+**Out of scope for now**
+
+- Saved recipes. The intended next step, deliberately not yet built: the
+  question set format has to prove itself first.
+- Batch processing and concurrency.
+- Calibration sweeps over labeled data.
+- An MCP server. Explicitly not wanted.
+- Anything that owns control flow between passes. Gating pass 2 on pass 1 is a
+  program; write it in a program.
+
+## Commands
 
 ```bash
-make help           # List Make targets
-make install        # Download Go modules
-make build          # Build ./bin/jevkit with version ldflags
-make bin            # Alias for build
-make run            # Run ./cmd/jevkit
-make go-install     # Install jevkit to GOPATH/bin
-make install-global # Alias for go-install
-make test           # Run tests
-make test-v         # Run tests verbosely
-make test-coverage  # Run tests with race detector and coverage
-make lint           # Run linters (golangci-lint, fallback go vet)
-make format         # Run go fmt ./...
-make clean          # Remove build artifacts
-```
-CLI smoke checks:
-
-```bash
-go run ./cmd/jevkit --help
-go run ./cmd/jevkit version
-go run ./cmd/jevkit config keys
+make build            # cargo build --release
+make test             # cargo test (all offline, no API key)
+make check            # fmt + clippy + test, what CI runs
+make lint             # cargo clippy -D warnings
+make install-global   # install to ~/.local/bin
 ```
 
-## File Layout
+## Layout
 
 ```
-cmd/jevkit/      # CLI entry point (cobra)
-  main.go             # binary entry point
-  root.go             # root command, persistent flags, command wiring
-  version.go          # version subcommand
-  config.go           # user config subcommands
-  ui.go               # terminal output helpers
-  help.go             # custom help formatting
-internal/
-  version/            # version info injected via ldflags
-  config/             # YAML config load/save/path helpers
-assets/               # demo content (GIFs, screenshots)
-.gitlab-ci.yml        # GitLab CI
-CHANGELOG.yaml        # changelog source
-CHANGELOG.md          # generated changelog output
-.chlog.yaml           # changelog config
+src/types.rs   # Wire types. Transport only, no authoring logic.
+src/client.rs  # HTTP, and translation of the server's Zod errors.
+src/input.rs   # YAML/JSON parsing, terse and canonical forms.
+src/lint.rs    # The differentiator. Schema + semantic rules.
+src/main.rs    # CLI wiring.
+examples/      # severity.yaml is clean; bad-questions.yaml fails every rule.
 ```
 
-## Config Behavior
+## Hard-won API details
 
-- User config lives at `~/.config/jevkit/config.yaml` by default.
-- Path priority: root `--config`, then `$JEVKIT_CONFIG`, then the default path.
-- Config commands: `init`, `show`, `path`, `edit`, `get`, `set`, `toggle`, `keys`.
-- Missing config files load as empty config; CLI flags should still win over config defaults.
+- Decisions go to `/api/alpha/decisions`. Jev rejects `/v1/chat/completions`.
+- **A `noul` answer is a probability in `[0,1]`, not a boolean.** Treating it as
+  truthy makes every answer "yes". Deliberately no `as_bool()` helper exists.
+- `criteria` is required for `choice` and `score`, optional for `noul`.
+- `noul` answers carry no `confidence` field; only `choice` and `score` do.
+- `instructions` and `state` each accept a string, an object, or an array. Lint
+  rules must read through all three, which is what `guidance_text` is for.
+- Server-side validation is Zod. Errors arrive as a JSON-encoded string nested
+  inside `error.message`, so the useful part is two layers deep.
+- Context limit is 32k tokens over the whole payload, not just the state.
+- Additional questions add no latency: Jev answers them in parallel. Batch into
+  one request rather than looping.
 
+## Rules
 
-## Testing Guidance
-
-- Prefer table tests with `map[string]struct{}` for command/config behavior.
-- Run `chlog check` after changelog edits.
-- Run `make test` for normal validation; use `make test-coverage` when touching shared packages.
-- Smoke-test generated command paths with `go run ./cmd/jevkit ...` before release work.
-
-## Release And Changelog
-
-- Release automation was not generated. Keep version ldflags in the Makefile if you add a release flow later.
-- Changelog source is `CHANGELOG.yaml`; regenerate `CHANGELOG.md` with `chlog sync`.
-- Use `chlog add <category> "message"` for unreleased entries when possible.
-
-
-## Multi-Agent Git Rules
-
-- Check `git status --short` before editing and before committing.
-- Keep writes scoped to files relevant to the task; do not clean up unrelated work.
-- Do not use `git stash`, `git reset --hard`, or broad checkout/revert commands in a shared worktree.
-- Stage explicit files only, not `git add .` or `git add -A`.
-- Run focused tests for the files you touched, then the relevant Make targets before handoff.
-
-## Coding Standards
-
-- Functions under 40 lines
-- Errors wrapped with context: `fmt.Errorf("doing X: %w", err)`
-- Map-based table tests: `map[string]struct{}`
-- Accept interfaces, return concrete types
+- **Every lint rule needs an observed failure behind it, not an intuition.**
+  Put the evidence in the rule's `help` text. A rule nobody can justify is a
+  rule that trains users to pass `--no-lint`.
+- Errors are for things the API rejects. Everything else is a warning. Do not
+  promote a heuristic to an error.
+- Warnings go to stderr in `ask`, so piping stdout to `jq` stays safe.
+- Tests must not require an API key or a network connection. All of them.
+- Never log, print, or echo a key. `auth status` prints a fingerprint: length
+  plus the last four characters. `auth login` reads from a hidden TTY and never
+  from argv.
+- Keep `client.rs` free of question-authoring logic and `lint.rs` free of HTTP.
+- When adding an input shorthand, ask whether it can shorten criteria. If it
+  can, it is the wrong shorthand.

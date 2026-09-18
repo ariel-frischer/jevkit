@@ -1,7 +1,9 @@
 project: jevkit
 versions:
-    unreleased: {}
-    0.0.1:
-        date: "2026-01-01"
+    unreleased:
         added:
-            - Initial project scaffolding
+            - "`jev ask`: send a YAML or JSON question set to Jev and print one value per question"
+            - "`jev lint`: offline schema and semantic validation, with no network call"
+            - "`jev auth`: OS keyring credentials, prompted on a hidden TTY and never taken from argv"
+            - "Terse YAML input that drops the API envelope without shortening criteria text"
+            - "Translation of the server's nested Zod validation errors into readable paths"

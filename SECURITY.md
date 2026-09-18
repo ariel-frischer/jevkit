@@ -17,7 +17,7 @@ security-sensitive reports.
 
 Send your report to the maintainer security contact for this project. If no
 private contact is listed, ask the maintainers for a private reporting channel at
-https://gitlab.com/demo/jevkit/issues before sharing vulnerability details.
+https://gitlab.com/ariel-frischer/jevkit/issues before sharing vulnerability details.
 
 Include:
 

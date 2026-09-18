@@ -1,18 +1,7 @@
-# Binaries
-dist/
-.release/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-bin/
-
-# Go
-vendor/
-go.work
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
 
 # IDEs
 .vscode/

@@ -1,0 +1,25 @@
+# Every question here is accepted by the API and billed, and every one is
+# defective. `jev lint` catches all of them offline.
+
+forced_choice:
+  choice: Pick
+  options:
+    only: only
+
+bare_labels:
+  choice: Which argument scheme does this passage use?
+  options:
+    analogy: analogy
+    popular_opinion: popular_opinion
+
+single_level:
+  score: Rate the severity
+  levels:
+    - only one level
+
+numeric_levels:
+  score: Rate the urgency of this ticket
+  levels: ["0", "1", "2"]
+
+conditional:
+  noul: Does the passage cite a source, if applicable?

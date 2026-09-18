@@ -1,29 +1,21 @@
 # CLAUDE.md
 
-## Project: jevkit
+See [AGENTS.md](AGENTS.md) for the full guidance. Summary:
 
-Fast Rust CLI for TypeSafe Jev: typed decisions, offline linting
-
-## Commands
+`jevkit` is a Rust CLI (binary: `jev`) for TypeSafe's Jev decisions model.
+Three commands: `ask`, `lint`, `auth`.
 
 ```bash
-make build          # Build binary
-make test           # Run tests
-make lint           # Run linters
-make format         # Format code
+make build    # cargo build --release
+make test     # offline tests, no API key needed
+make check    # fmt + clippy + test
 ```
 
-## Architecture
+Two things to internalize before changing anything:
 
-```
-cmd/jevkit/      # CLI entry point (cobra)
-internal/version/    # Version info (ldflags)
-assets/              # Demo content (GIFs, screenshots)
-```
+- **A `noul` answer is a probability in [0,1], not a boolean.** Treating it as
+  truthy makes every answer "yes".
+- **Criteria text is the prompt, not documentation.** Shortening it changes
+  answers. Measured: bare labels flipped a verdict.
 
-## Coding Standards
-
-- Functions under 40 lines
-- Errors wrapped with context: `fmt.Errorf("doing X: %w", err)`
-- Map-based table tests: `map[string]struct{}`
-- Accept interfaces, return concrete types
+`lint` is the point of the tool. Every rule needs an observed failure behind it.
