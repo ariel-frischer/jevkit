@@ -70,6 +70,31 @@ fn state_dir() -> Result<PathBuf> {
     Ok(home.join("jev"))
 }
 
+/// The argv joined, with the value after `--api-key` redacted.
+///
+/// The exact invocation is usually the fastest way to reproduce a call, but
+/// argv is also the one place a key can enter this module: `--api-key KEY` is
+/// a supported flag. Fingerprint it like `auth status` does, so a record is
+/// still identifiable without being usable.
+fn redacted_invocation() -> String {
+    redact_args(&std::env::args().collect::<Vec<String>>())
+}
+
+fn redact_args(args: &[String]) -> String {
+    let mut out: Vec<String> = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    for arg in args {
+        if redact_next {
+            out.push(crate::auth::fingerprint(arg));
+            redact_next = false;
+        } else {
+            out.push(arg.clone());
+            redact_next = arg == "--api-key";
+        }
+    }
+    out.join(" ")
+}
+
 /// Append one call record, creating the file and parent dirs if missing.
 ///
 /// Ledger failures are reported but surfaced only after the call result has
@@ -81,9 +106,7 @@ pub fn log_call<R: serde::Serialize>(
     response: Option<&R>,
     status: &'static str,
 ) -> Result<()> {
-    // The raw argv as the user typed it, not a normalized struct: the exact
-    // invocation is usually the fastest way to reproduce a call.
-    let invocation = std::env::args().collect::<Vec<String>>().join(" ");
+    let invocation = redacted_invocation();
     let record = LedgerRecord {
         ts: iso8601_now(),
         command: "ask".to_string(),
@@ -171,6 +194,24 @@ mod tests {
         assert!(contents.contains("\"provider\":\"openrouter\""));
         assert!(!contents.contains("api_key"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn invocation_redacts_the_api_key_value() {
+        // std::env::args() is not settable per-test, so test the redaction
+        // logic directly; log_call's use of it is covered by the live binary.
+        let args = vec![
+            "jev".to_string(),
+            "ask".to_string(),
+            "--api-key".to_string(),
+            "SUPERSECRET-abc123xyz".to_string(),
+            "--log".to_string(),
+        ];
+        let redacted = redact_args(&args);
+        assert!(!redacted.contains("SUPERSECRET"));
+        assert!(redacted.contains("--api-key"), "flag name stays visible");
+        // The next flag's value is untouched.
+        assert!(redacted.contains("--log"));
     }
 
     #[test]
