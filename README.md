@@ -139,7 +139,12 @@ jev ask -q questions.yaml "some text"          # state as an argument
 
 jev ask -q questions.yaml --dry-run            # print the payload, send nothing
 jev ask -q questions.yaml --raw                # full response with usage and cost
+
+jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
 ```
+
+`--question-set` passes a question set inline as a YAML or JSON string, no file
+needed. `jev lint --question-set` works the same way.
 
 Linting runs automatically. Errors block the call, warnings print to stderr and
 proceed. Warnings go to stderr specifically so that piping stdout to `jq` stays

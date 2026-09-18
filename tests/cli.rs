@@ -187,6 +187,111 @@ fn lint_missing_file_fails() {
 }
 
 // ---------------------------------------------------------------------------
+// --question-set: question sets passed inline as CLI strings, no file needed.
+// ---------------------------------------------------------------------------
+
+const CLEAN_INLINE_JSON: &str =
+    r#"{"risky":{"type":"noul","instructions":"Is this text dangerous?"}}"#;
+
+const CLEAN_INLINE_YAML: &str = "risky:\n  noul: Is this text dangerous?\n";
+
+/// An inline JSON question set lints clean and exits zero, exactly as a file
+/// would, without any temporary file.
+#[test]
+fn ask_inline_question_set_json_lints_clean() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "--dry-run",
+            "state",
+        ])
+        .assert()
+        .success();
+}
+
+/// An inline YAML question set works the same way as inline JSON.
+#[test]
+fn ask_inline_question_set_yaml_lints_clean() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_YAML,
+            "--dry-run",
+            "state",
+        ])
+        .assert()
+        .success();
+}
+
+/// An inline question set reaches the API payload: the question name, type,
+/// and instructions must appear in the dry-run request.
+#[test]
+fn ask_inline_question_set_appears_in_dry_run_payload() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "--dry-run",
+            "some state",
+        ])
+        .output()
+        .expect("dry-run runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("\"risky\"") && stdout.contains("Is this text dangerous?"),
+        "dry-run payload must contain the inline question, got:\n{stdout}"
+    );
+}
+
+/// Inline input flows through linting: a known failure rule fires on an inline
+/// set, same as it would from a file.
+#[test]
+fn lint_inline_question_set_reports_findings() {
+    // One option is an error: the answer cannot inform anyone.
+    let inline = r#"{"pick":{"type":"choice","options":["only"],"instructions":"Pick one"}}"#;
+    let assert = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "--question-set", inline])
+        .assert()
+        .failure();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    assert!(
+        stdout.contains("single-option"),
+        "inline set must go through lint rules, got:\n{stdout}"
+    );
+}
+
+/// An inline set lints clean under --json, producing the empty array a clean
+/// file produces.
+#[test]
+fn lint_inline_question_set_json_outputs_empty_array() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "--json", "--question-set", CLEAN_INLINE_JSON])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("[]"));
+}
+
+/// Passing --question-set and both questions unset behaves as before: ask
+/// refuses without any question source.
+#[test]
+fn ask_without_question_source_fails() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["ask", "--dry-run", "state"])
+        .assert()
+        .failure();
+}
+
+// ---------------------------------------------------------------------------
 // POST_MERGE_ADJUSTMENTS for agent/cli-ergonomics (0=clean, 1=errors,
 // 2=warnings-only, --strict):
 //
