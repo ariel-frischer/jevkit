@@ -156,22 +156,29 @@ Validate a question set without touching the network.
 
 ```bash
 jev lint questions.yaml
+jev lint --json questions.yaml          # machine-readable findings
+jev lint --strict questions.yaml        # warnings fail CI (alias: --deny-warnings)
 ```
 
 Exit codes follow a documented contract, for use in scripts and CI:
 
 - `0` the question set is clean
-- `1` errors were found (the API would reject these)
+- `1` errors were found (the API would reject these), or warnings with `--strict`
 - `2` warnings only, which are heuristics rather than rejections
 
-`--strict` promotes warnings to exit `1`, for pipelines that want zero noise.
 `--json` prints the findings as machine-readable JSON with rule id, severity,
-message, and location; text mode keeps warnings on stderr so piping stdout to
-`jq` stays safe. Shell completions are generated for the major shells and
-installed alongside the binary.
+message, path, and help. Text mode prints findings to stdout so piping to `jq`
+stays safe. Shell completions and a man page are behind the hidden `completions`
+subcommand, generated at build time alongside the binary.
 
-This contract lands via the `agent/cli-ergonomics` branch; wording here is
-reconciled after that branch merges.
+### `jev ask` inline question sets
+
+```bash
+jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
+```
+
+`--question-set` passes a question set inline as a YAML or JSON string, no file
+needed. `jev lint --question-set` works the same way.
 
 ### `jev auth`
 
