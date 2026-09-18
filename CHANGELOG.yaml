@@ -1,0 +1,7 @@
+project: jevkit
+versions:
+    unreleased: {}
+    0.0.1:
+        date: "2026-01-01"
+        added:
+            - Initial project scaffolding

@@ -1,0 +1,64 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  GOFLAGS: "-buildvcs=false"
+
+.go-cache:
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  cache:
+    key: go-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .go/pkg/mod/
+
+lint:
+  stage: lint
+  image: golang:1.25
+  extends: .go-cache
+  script:
+    - test -z "$(gofmt -s -l .)"
+    - go vet ./...
+
+
+changelog-check:
+  stage: lint
+  image: golang:1.25
+  extends: .go-cache
+  script:
+    - |
+      if command -v chlog >/dev/null 2>&1; then
+        chlog check
+      else
+        echo "chlog not installed, skipping changelog validation"
+      fi
+  allow_failure: true
+
+
+test:
+  stage: test
+  image: golang:1.25
+  extends: .go-cache
+  script:
+    - go test -race -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.out
+
+build:
+  stage: build
+  image: golang:1.25
+  extends: .go-cache
+  script:
+    - make build VERSION=dev
+  artifacts:
+    paths:
+      - bin/
+    expire_in: 7 days
+
