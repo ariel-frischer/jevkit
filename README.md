@@ -337,7 +337,7 @@ GitHub Actions runs on push and pull request.
 | clippy | `cargo clippy --all-targets -- -D warnings` |
 | test | offline tests only, no API key or network required |
 | build | `cargo build --release` |
-| msrv | the 1.82 minimum supported Rust version |
+| msrv | the 1.88 minimum supported Rust version |
 | cargo-deny | dependency advisory audit, weekly |
 
 ## Notes on the API

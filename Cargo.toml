@@ -2,7 +2,7 @@
 name = "jevkit"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.88"
 description = "Fast Rust CLI for TypeSafe Jev: typed decisions, offline linting"
 authors = ["Ariel Frischer <arielfrischer@gmail.com>"]
 license = "MIT"
