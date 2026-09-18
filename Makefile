@@ -43,10 +43,13 @@ check: ## Verify formatting, lints, and tests
 	cargo test
 
 audit: ## Check dependencies for advisories
-	@if command -v cargo-audit >/dev/null 2>&1; then \
+	@if command -v cargo-deny >/dev/null 2>&1; then \
+		cargo deny check; \
+	elif command -v cargo-audit >/dev/null 2>&1; then \
 		cargo audit; \
 	else \
-		echo "cargo-audit not installed: cargo install cargo-audit"; \
+		echo "Neither cargo-deny nor cargo-audit is installed."; \
+		echo "Prefer: cargo install cargo-deny && cargo deny --init"; \
 	fi
 
 clean: ## Remove build artifacts

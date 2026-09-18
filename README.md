@@ -151,9 +151,22 @@ Validate a question set without touching the network.
 
 ```bash
 jev lint questions.yaml
-jev lint --json questions.yaml         # machine-readable findings
-jev lint --deny-warnings questions.yaml # exit 1 on warnings, for CI
 ```
+
+Exit codes follow a documented contract, for use in scripts and CI:
+
+- `0` the question set is clean
+- `1` errors were found (the API would reject these)
+- `2` warnings only, which are heuristics rather than rejections
+
+`--strict` promotes warnings to exit `1`, for pipelines that want zero noise.
+`--json` prints the findings as machine-readable JSON with rule id, severity,
+message, and location; text mode keeps warnings on stderr so piping stdout to
+`jq` stays safe. Shell completions are generated for the major shells and
+installed alongside the binary.
+
+This contract lands via the `agent/cli-ergonomics` branch; wording here is
+reconciled after that branch merges.
 
 ### `jev auth`
 
@@ -299,6 +312,21 @@ one, for 39% more cost:
 
 So batch questions into one request rather than looping. Ten thin calls would
 have cost ten round trips and ten times the base overhead.
+
+## Continuous integration
+
+GitHub Actions workflow files exist in the repository. They are code only, so
+they are committed even though no public repository has been created yet; they
+start running the moment one is.
+
+| Job | Runs |
+|---|---|
+| fmt | `cargo fmt --check` |
+| clippy | `cargo clippy --all-targets -- -D warnings` |
+| test | offline tests only, no API key or network required |
+| build | `cargo build --release` |
+| msrv | the 1.82 minimum supported Rust version |
+| cargo-deny | dependency advisory audit, weekly |
 
 ## Notes on the API
 
