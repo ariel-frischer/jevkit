@@ -254,15 +254,17 @@ fn ask_inline_question_set_appears_in_dry_run_payload() {
 /// set, same as it would from a file.
 #[test]
 fn lint_inline_question_set_reports_findings() {
-    // One option is an error: the answer cannot inform anyone. Criteria are
-    // required for the set to parse at all.
-    let inline = r#"{"pick":{"type":"choice","options":["only"],"criteria":"Choose one","instructions":"Pick one"}}"#;
-    let assert = Command::cargo_bin("jev")
+    // A one-option choice parses fine but trips the single-option rule. The
+    // option needs a criteria mapping (option -> description) to be legal.
+    // single-option is a warning, so exit is still zero.
+    let inline = r#"{"pick":{"type":"choice","instructions":"State whether this is risky","criteria":{"only":"The only choice"}}}"#;
+    let output = Command::cargo_bin("jev")
         .expect("jev binary builds")
         .args(["lint", "--question-set", inline])
-        .assert()
-        .failure();
-    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+        .output()
+        .expect("lint runs");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("single-option"),
         "inline set must go through lint rules, got:\n{stdout}"
