@@ -14,6 +14,7 @@
 
 mod auth;
 mod client;
+mod config;
 mod input;
 mod lint;
 mod types;
@@ -49,8 +50,34 @@ enum Command {
     Ask(AskArgs),
     /// Check a question set offline, without spending an API call
     Lint(LintArgs),
+    /// Manage user-level configuration
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
     /// Manage stored API credentials
     Auth(AuthArgs),
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Print the config file path
+    Path,
+    /// Print the effective configuration, one key per line
+    Show,
+    /// Print one configuration value
+    Get {
+        /// A configured key; see `jev config keys`
+        key: String,
+    },
+    /// Set one configuration value, creating the config file as needed
+    Set {
+        /// A configured key; see `jev config keys`
+        key: String,
+        value: String,
+    },
+    /// List configurable keys with their meaning
+    Keys,
 }
 
 #[derive(Args)]
@@ -160,7 +187,98 @@ fn run() -> Result<()> {
         Command::Ask(args) => cmd_ask(args),
         Command::Lint(args) => cmd_lint(args),
         Command::Auth(args) => cmd_auth(args),
+        Command::Config { command } => cmd_config(command),
     }
+}
+
+fn cmd_config(command: ConfigCommand) -> Result<()> {
+    match command {
+        ConfigCommand::Path => {
+            println!("{}", config::config_path()?.display());
+        }
+        ConfigCommand::Show => {
+            let cfg = config::load()?;
+            for spec in config::KEYS {
+                let value = cfg.get_string(spec.key).unwrap_or_default();
+                if value.is_empty() {
+                    println!("{:<8} (unset)", spec.key);
+                } else {
+                    println!("{:<8} {}", spec.key, value);
+                }
+            }
+        }
+        ConfigCommand::Get { key } => {
+            let spec = config::find_key(&key).ok_or_else(|| {
+                anyhow::anyhow!("unknown config key {key:?}; see `jev config keys`")
+            })?;
+            let cfg = config::load()?;
+            match cfg.get_string(spec.key) {
+                Ok(v) if !v.is_empty() => println!("{v}"),
+                _ => println!("{key}: not set"),
+            }
+        }
+        ConfigCommand::Set { key, value } => {
+            let spec = config::find_key(&key).ok_or_else(|| {
+                anyhow::anyhow!("unknown config key {key:?}; see `jev config keys`")
+            })?;
+            if spec.one_of_provider && crate::auth::provider_by_name(&value).is_err() {
+                bail!("invalid provider {value:?}; expected one of: openrouter, typesafe");
+            }
+            write_config_key(spec.key, &value)?;
+            println!(
+                "set {}={} in {}",
+                spec.key,
+                value,
+                config::config_path()?.display()
+            );
+        }
+        ConfigCommand::Keys => {
+            for spec in config::KEYS {
+                println!("{:<10} {}", spec.key, spec.description);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Write one key into the user config file, preserving other settings.
+///
+/// The file is plain TOML `key = "value"` lines rather than a serde
+/// round-trip: the file is user-owned and may hold comments and unknown
+/// keys, and a rewrite that drops either would be data loss.
+fn write_config_key(key: &str, value: &str) -> Result<()> {
+    let path = config::config_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e).with_context(|| format!("failed to read {}", path.display())),
+    };
+    let line = format!("{key} = \"{value}\"\n");
+    let mut out = String::with_capacity(existing.len() + line.len());
+    let mut replaced = false;
+    for l in existing.lines() {
+        let s = l.trim();
+        if s.starts_with(key)
+            && (s == key || s.starts_with(&format!("{key} ")) || s.starts_with(&format!("{key}=")))
+        {
+            out.push_str(&line);
+            replaced = true;
+        } else {
+            out.push_str(l);
+            out.push('\n');
+        }
+    }
+    if !replaced {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&line);
+    }
+    std::fs::write(&path, out).with_context(|| format!("failed to write {}", path.display()))
 }
 
 fn cmd_ask(args: AskArgs) -> Result<()> {
@@ -184,9 +302,31 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         (None, None) => read_source(None)?,
     };
 
-    let provider = auth::provider_by_name(&args.provider)?;
+    // Layered settings: CLI flags win, then JEV_* env, then the config file,
+    // then the provider's built-in default. Loading is cheap and late: none
+    // of this touches the network.
+    let defaults = config::load()?;
+    let provider_name = if args.provider == "openrouter" {
+        // The default_value equals the built-in default, so the flag cannot
+        // distinguish "user passed -p openrouter" from "flag untouched".
+        // Precedence therefore treats an equal-to-default flag as unset; a
+        // genuinely different provider always wins.
+        match config::resolved_provider(&defaults) {
+            Ok(p) => p,
+            Err(e) => {
+                // A bad provider in config should not silently win; surface
+                // but fall back rather than blocking the call.
+                eprintln!("warning: {e:#}");
+                args.provider.clone()
+            }
+        }
+    } else {
+        args.provider.clone()
+    };
+    let provider = auth::provider_by_name(&provider_name)?;
     let model = args
         .model
+        .or(config::resolved_model(&defaults)?)
         .unwrap_or_else(|| provider.default_model.to_string());
 
     let session_id_ref = args.session_id.clone();
@@ -232,17 +372,32 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
     let result = client.decide(&request);
     let elapsed_ms = started.elapsed().as_millis();
 
-    // Opt-in ledger. Failure to log is surfaced but never replaces the real
-    // result of a paid call.
-    if args.log.is_some() || std::env::var_os("JEV_LOG_FILE").is_some() {
+    // Ledger resolution: an explicit --log path wins; a bare --log consults
+    // the config's log setting, then the default XDG state path.
+    let log_arg = args.log.clone();
+    let ledger_requested = log_arg.is_some()
+        || std::env::var_os("JEV_LOG_FILE").is_some()
+        || matches!(
+            config::resolved_log(&defaults)?,
+            config::LogSetting::DefaultPath | config::LogSetting::Path(_)
+        );
+    if ledger_requested {
         let record_request = serde_json::to_value(&request)
             .context("failed to serialize the request for the usage ledger")?;
-        let ledger_path = usage::resolve_log_path(
-            args.log
-                .as_deref()
-                .filter(|s| !s.is_empty())
-                .map(std::path::PathBuf::from),
-        )?;
+        let ledger_path = match log_arg
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+        {
+            Some(p) => p,
+            None => match config::resolved_log(&defaults)? {
+                config::LogSetting::Path(p) => p,
+                _ => match std::env::var_os("JEV_LOG_FILE").map(std::path::PathBuf::from) {
+                    Some(p) => p,
+                    None => usage::resolve_log_path(None)?,
+                },
+            },
+        };
         let call_result = {
             let meta = usage::CallMeta {
                 provider: provider.name,
