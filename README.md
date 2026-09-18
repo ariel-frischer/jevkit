@@ -51,6 +51,15 @@ $ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?
 that teaches a coding agent to drive the CLI; agents can also consume it via
 `npx skills add ariel-frischer/jevkit`.
 
+## Features
+
+- **Typed questions**: `noul` (probability), `choice` (label), `score` (level), sent in terse YAML or JSON, by file, stdin, or `--question-set` inline
+- **Offline linting**: 13 rules that catch billed-but-useless questions before a call; documented exit codes for CI
+- **Usage ledger**: `jev ask --log` appends one JSON line per call (request, response, tokens, cost) to `~/.local/state/jev/usage.jsonl`
+- **Config**: user defaults in `~/.config/jev/config.toml` (`provider`, `model`, `log`), layered flags > env > config > defaults
+- **Keyring auth**: keys stored in the OS credential store, never argv or shell history; fingerprint display rather than the key itself
+- **One call, all answers**: additional questions are answered in parallel by the API, so batching costs nothing in latency
+
 ## Why this exists
 
 Calling the decisions API is not hard: one POST, three question types. You can
