@@ -21,9 +21,6 @@ before you spend anything on a call.
 
 ## Install
 
-One line, Linux and macOS (no Rust toolchain needed; the installer downloads a
-prebuilt binary from GitHub Releases and verifies its SHA-256 checksum):
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
 ```
