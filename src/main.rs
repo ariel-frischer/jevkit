@@ -29,6 +29,15 @@ use types::{Answer, Request};
 
 const VERSION_BASE: &str = env!("CARGO_PKG_VERSION");
 
+/// ASCII logo from assets/logo.txt, tinted cyan with 256-color ANSI.
+/// Shown by the bare `--version` flag so there is a "v command"-style view;
+/// the clap `version` string itself stays one plain line for scripts.
+const LOGO_ANSI: &str = concat!(
+    "\x1b[38;5;39m   ██ ██████ ██  ██ ██ ▄█▀ ██ ██████ \x1b[0m\n",
+    "\x1b[38;5;39m   ██ ██▄▄   ██▄▄██ ████   ██   ██   \x1b[0m\n",
+    "\x1b[38;5;39m████▀ ██▄▄▄▄  ▀██▀  ██ ▀█▄ ██   ██   \x1b[0m\n",
+);
+
 /// Crate version, plus the git hash stamped by build.rs for non-tagged
 /// builds. Tagged builds get the plain version.
 fn version_string() -> &'static str {
@@ -210,6 +219,19 @@ enum AuthCommand {
 }
 
 fn main() {
+    // Bare `--version` (no other args) gets the ANSI logo view, like a
+    // `version` subcommand would. Anything else keeps clap's plain one-liner
+    // so scripts parsing `jev --version` never see escapes.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() == 1 && (args[0] == "--version" || args[0] == "-V") {
+        print!("{LOGO_ANSI}");
+        println!("jev {VERSION_BASE}");
+        let hash = std::env!("JEV_GIT_HASH");
+        if !hash.is_empty() {
+            println!("built from {hash}");
+        }
+        return;
+    }
     if let Err(e) = run() {
         eprintln!("error: {e:#}");
         std::process::exit(1);
