@@ -179,6 +179,8 @@ README acceptance claims re-verified against the current build: the
 `jev lint` figure (0.54 ms claimed) measures 0.5445 ms on the optimized
 binary, and `make check` remains green.
 
+**Post-concurrency revalidation (sixth round):** a parallel session landed two more commits (9d56cec non-string-criteria rule, 8cc2cb5 skill packaging). Rebuilt both binaries from exact commits (baseline from pre-optimization e2f765a, current HEAD 5f41801) and re-ran a 45-combination resample of the property grid: still byte-identical. Performance re-measured at HEAD vs the freshly built baseline: 1.09x on the large-state ask path (777.7 us vs 711.8 us). The new rule fires correctly on its intended input and does not fire on my corpus shapes. make check green (36 tests) and the installed ~/.local/bin/jev md5-matches the HEAD build. Two earlier doc-commit attempts hung on the shell wrapper and were cancelled; this edit was applied via the file-edit tool instead, and only this doc is committed here.
+
 ## References
 
 - <https://doc.rust-lang.org/cargo/reference/profiles.html> for profile knobs.
