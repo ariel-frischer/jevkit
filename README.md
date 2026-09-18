@@ -1,4 +1,13 @@
-# jevkit
+<div align="center">
+
+<pre>
+ ▄█ █▀ █▀▄ █ ▀█▀
+█▄█ ██▄ ▀▄▀ █▄▀ █ 
+</pre>
+
+**Typed decisions from the command line.**
+
+</div>
 
 A CLI for [TypeSafe's Jev](https://docs.typesafe.ai), a model that returns
 typed decisions instead of prose. Ask it questions about a passage and get back
