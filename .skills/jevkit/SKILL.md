@@ -64,7 +64,12 @@ jev ask -q questions.yaml --no-lint      # send anyway, defects and all
 # lint: never touches the network
 jev lint questions.yaml
 jev lint --json questions.yaml           # machine-readable findings
-jev lint --deny-warnings questions.yaml  # exit 1 on warnings, for CI
+jev lint --strict questions.yaml         # exit 1 on warnings, for CI (alias: --deny-warnings)
+
+# inline: question set as a CLI string, no file
+jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
+jev lint --question-set 'risky:
+  noul: Is this dangerous?'
 
 # auth: keyring-backed
 jev auth login                           # hidden prompt, never argv
@@ -74,6 +79,22 @@ jev auth logout
 
 Input is YAML **or** JSON, by file or on stdin, detected automatically with no
 flag.
+
+## Inline vs file-based question sets
+
+`--question-set '…'` passes the question set as a CLI string; `-q FILE` reads
+it from a file. Which to use:
+
+- **Inline** when the question set is one-off, throwsaway, or small: quick
+  probes, shell scripts generating the JSON on the fly, CI one-shots, examples
+  in docs. Avoids temp files and keeps the whole call in one command.
+- **File** when the set is used more than once, is over a few lines, or
+  contains prose-heavy criteria. Criteria are the prompt, so reusable sets
+  should live in version control with the code that gates on them. Deeply
+  nested YAML or JSON gets unreadable in shell quoting; a file also avoids
+  shell-quoting traps (`'` inside criteria text).
+- Either way the set goes through the same parsing and full linting, so
+  inline loses nothing except persistence.
 
 ## Writing a question set
 
@@ -182,6 +203,9 @@ probably not what you meant.
 | `compound-question`, `terse-instructions` | warning |
 | `numeric-level`, `too-many-levels` | warning |
 | `context-pressure` | warning |
+
+Exit codes: `0` clean, `1` errors found (or any finding with `--strict`),
+`2` warnings only.
 
 ## Debugging a wrong answer
 
