@@ -169,4 +169,42 @@ mod tests {
         let err = provider_by_name("nope").unwrap_err().to_string();
         assert!(err.contains("openrouter"));
     }
+
+    /// Exercises the real OS keyring: store, read back, delete, confirm gone.
+    ///
+    /// Ignored by default because CI containers have no Secret Service and the
+    /// test would fail for reasons unrelated to this code. Run it with
+    /// `cargo test -- --ignored` on a desktop session.
+    #[test]
+    #[ignore = "requires an OS keyring (Secret Service / Keychain / Credential Manager)"]
+    fn keyring_round_trip() {
+        // A provider entry that no real credential would collide with.
+        let provider = Provider {
+            name: "jevkit-selftest",
+            endpoint: "https://example.invalid",
+            default_model: "test",
+            env_var: "JEVKIT_SELFTEST_KEY",
+        };
+
+        let _ = keyring_delete(provider);
+        assert_eq!(keyring_get(provider).unwrap(), None, "should start empty");
+
+        keyring_set(provider, "test-secret-value").unwrap();
+        assert_eq!(
+            keyring_get(provider).unwrap().as_deref(),
+            Some("test-secret-value")
+        );
+
+        // With no flag and no env var set, resolution must find the keyring.
+        let (key, source) = resolve(provider, None).unwrap();
+        assert_eq!(key, "test-secret-value");
+        assert_eq!(source, Source::Keyring);
+
+        assert!(keyring_delete(provider).unwrap(), "delete reports removal");
+        assert_eq!(keyring_get(provider).unwrap(), None, "should end empty");
+        assert!(
+            !keyring_delete(provider).unwrap(),
+            "second delete reports nothing to remove"
+        );
+    }
 }
