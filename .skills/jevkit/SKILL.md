@@ -123,8 +123,10 @@ needs supporting detail.
   identical input, `{"analogy": "analogy"}` chose `analogy` (0.75) while a
   written description chose `popular_opinion` (0.76). The verdict inverted.
   Criteria text is the prompt, not documentation.
-- **Quote anything YAML might read as a number or boolean.** A bare `1.5` level
-  becomes a JSON number and the API rejects it outright.
+- **Quote any description containing `": "`.** This is the one YAML trap that
+  bites in practice, because criteria are prose and prose contains colons.
+  `a: Use this when: the text says so` is a parse error. Write
+  `a: "Use this when: the text says so"`.
 - **Never write a conditional question.** "…, if applicable" returns values
   near 0.5, indistinguishable from real uncertainty. Ask positively and gate the
   question in code.
@@ -137,6 +139,30 @@ needs supporting detail.
   ten round trips.
 - **A `score` needs two or more levels and a `choice` two or more options.**
   Otherwise the answer is forced, and the call is still billed.
+
+## YAML traps, and which ones are real
+
+Most of the usual YAML-to-JSON complaints do not apply here. Verified against
+the live API:
+
+| Written | Result |
+|---|---|
+| `a: 12:30` | stays the string `"12:30"`, safe |
+| `a: 0755` | stays `"0755"`, safe |
+| `a: 12345678901234567890` | stays a string, no precision loss |
+| `NO:` as a label | stays `"NO"`, not `false` (the Norway problem is handled) |
+| `a: 1.5` | **coerced** to `"1.5"` by jevkit, since that is the only thing it could mean |
+| `a: true` | **coerced** to `"true"` |
+
+Two are genuinely fatal, and both produce an explanation rather than a raw
+parser message:
+
+- **An unquoted value containing `": "`.** YAML reads it as a nested mapping.
+  Quote the whole value. This is by far the likeliest mistake in a criteria
+  file.
+- **Tab indentation.** YAML forbids it. Use spaces.
+
+When in doubt, `jev lint` tells you before any call is made.
 
 ## What lint catches
 

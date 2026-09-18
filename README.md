@@ -214,6 +214,24 @@ risky:
 The terse form drops the envelope, never the content. Criteria stay full
 sentences in both.
 
+### YAML scalar typing
+
+YAML types an unquoted `1.5` as a number and `true` as a boolean, and the API
+requires criteria to be text. `jev` coerces those back to strings rather than
+making you quote them, since the text is the only thing they could have meant.
+A quoted `"1.5"` is untouched, and objects and arrays are left alone.
+
+Most other YAML-to-JSON complaints do not apply: `12:30`, `0755`, and a
+20-digit integer all stay strings under YAML 1.2, and a bare `NO` label stays
+`"NO"` rather than becoming `false`.
+
+Two things are still fatal, and both report what to do about it:
+
+- An unquoted value containing `": "`, which YAML reads as a nested mapping.
+  This is the likeliest mistake in a criteria file, since descriptions are
+  prose. Quote the whole value.
+- Tab indentation, which YAML forbids.
+
 `instructions` also accepts a structured object, which the API supports and
 which lint reads through:
 
@@ -229,8 +247,7 @@ q:
 | Rule | Severity | Catches |
 |---|---|---|
 | `missing-criteria` | error | `choice`/`score` without criteria, which the API rejects |
-| `non-string-criteria` | error | A `choice` description YAML read as a number or boolean |
-| `non-string-level` | error | A `score` level YAML read as a number or boolean |
+| `non-string-criteria`, `non-string-level` | error | A non-string criteria value, for requests built in code; the CLI coerces these |
 | `empty-instructions` | error | A question with nothing to judge |
 | `context-overflow` | error | A payload that cannot fit the 32k-token limit under any tokenization |
 | `degenerate-criteria` | warning | Criteria that restate the label |
