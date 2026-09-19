@@ -1,4 +1,7 @@
-.PHONY: help install i build bin run test test-v lint format check clean install-global uninstall audit release patch minor major
+.PHONY: help install i build bin run test test-v lint format check clean install-global uninstall audit release patch minor major \
+	worktree video-studio video-render video-render-draft video-check
+
+WORKTREE_SCRIPT ?= scripts/worktree-setup.sh
 
 BIN_NAME=jev
 INSTALL_DIR?=$(HOME)/.local/bin
@@ -91,3 +94,21 @@ major: ## Bump the major version and release
 	$(eval NEXT=v$(shell echo $(CURRENT) | awk -F. '{printf "%d.0.0", $$1+1}'))
 	@echo "Bumping $(CURRENT) -> $(NEXT)"
 	$(MAKE) release VERSION=$(NEXT)
+
+##@ Worktree and local video workspace
+
+worktree: ## Create an agent-ready worktree (usage: make worktree BRANCH=agent/name [BASE=dev])
+	@test -n "$(BRANCH)" || (echo "BRANCH is required: make worktree BRANCH=agent/name [BASE=dev]" >&2; exit 1)
+	@bash "$(WORKTREE_SCRIPT)" "$(BRANCH)" "$(BASE)"
+
+video-studio: ## Open Remotion Studio for jevkit videos (requires video/ setup)
+	cd video && npm run studio
+
+video-render: ## Render the jevkit demo video
+	cd video && npm run render -- demo
+
+video-render-draft: ## Render a faster draft preview of the demo video
+	cd video && DRAFT=1 npm run render -- demo
+
+video-check: ## Typecheck and run video quality checks
+	cd video && npm run typecheck && npm run check:quality:typed

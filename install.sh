@@ -208,12 +208,11 @@ check_path() {
 
 main() {
     echo ""
-    printf '%b%s\n' "${GREEN}" '     ██╗███████╗██╗   ██╗'
-    printf '%s%b\n' '     ██║██╔════╝██║   ██║' "${NC}"
-    printf '%s%b\n' '     ██║█████╗  ██║   ██║' "${NC}"
-    printf '%s%b\n' '██   ██║██╔══╝  ╚██╗ ██╔╝' "${NC}"
-    printf '%s%b\n' '╚█████╔╝███████╗ ╚████╔╝ ' "${NC}"
-    printf '%s%b\n' ' ╚════╝ ╚══════╝  ╚═══╝  ' "${NC}"
+    printf '%b%s\n' "${GREEN}" '   ██ ██████ ██  ██ ██ ▄█▀ ██ ██████'
+    printf '%b%s\n' "${GREEN}" '   ██ ██▄▄   ██▄▄██ ████   ██   ██  '
+    printf '%b%s\n' "${GREEN}" '   ██ ██▄▄▄▄  ▀██▀  ██ ▀█▄ ██   ██  '
+    printf '%b%s\n' "${GREEN}" '████▀ ██▄▄▄▄  ▀██▀  ██ ▀█▄ ██   ██ '
+    printf '%s%b%s\n' '████▀ ' "${NC}" 'jevkit'
     echo "         Installer"
     echo ""
 
