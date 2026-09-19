@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- Background - terminal dark -->
+  <rect width="1280" height="640" fill="#0d1117"/>
+
+  <!-- Terminal window frame -->
+  <rect x="40" y="30" width="1200" height="580" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Terminal title bar -->
+  <rect x="40" y="30" width="1200" height="40" rx="12" fill="#21262d"/>
+  <rect x="40" y="58" width="1200" height="12" fill="#21262d"/>
+
+  <!-- Traffic lights -->
+  <circle cx="72" cy="50" r="7" fill="#ff5f56"/>
+  <circle cx="96" cy="50" r="7" fill="#ffbd2e"/>
+  <circle cx="120" cy="50" r="7" fill="#27ca40"/>
+
+  <!-- Terminal title -->
+  <text x="640" y="56" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="14" fill="#8b949e">jevkit</text>
+
+  <!-- Terminal content -->
+  <g transform="translate(80, 110)">
+    <text x="0" y="0" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="18" fill="#8b949e">$</text>
+    <text x="20" y="0" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="18" fill="#58a6ff">jev ask examples/severity.yaml</text>
+    <text x="0" y="40" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="16" fill="#8b949e">✓ 3 answers · score 0.78 · confidence high ✓</text>
+  </g>
+
+  <!-- JEVKIT ANSI logo, exact shape from assets/logo.txt, centered -->
+  <g fill="#e6edf3" transform="translate(290, 210)">
+      <rect x="58.33" y="0.0" width="38.89" height="38.89"/>
+      <rect x="116.67" y="0.0" width="116.67" height="38.89"/>
+      <rect x="252.78" y="0.0" width="38.89" height="38.89"/>
+      <rect x="330.56" y="0.0" width="38.89" height="38.89"/>
+      <rect x="388.89" y="0.0" width="38.89" height="38.89"/>
+      <rect x="466.67" y="0.0" width="19.44" height="38.89"/>
+      <rect x="486.11" y="0.0" width="19.44" height="19.44"/>
+      <rect x="525.0" y="0.0" width="38.89" height="38.89"/>
+      <rect x="583.33" y="0.0" width="116.67" height="38.89"/>
+      <rect x="447.22" y="19.44" width="19.44" height="19.44"/>
+      <rect x="58.33" y="38.89" width="38.89" height="38.89"/>
+      <rect x="116.67" y="38.89" width="38.89" height="38.89"/>
+      <rect x="252.78" y="38.89" width="38.89" height="38.89"/>
+      <rect x="330.56" y="38.89" width="38.89" height="38.89"/>
+      <rect x="388.89" y="38.89" width="77.78" height="38.89"/>
+      <rect x="525.0" y="38.89" width="38.89" height="38.89"/>
+      <rect x="622.22" y="38.89" width="38.89" height="38.89"/>
+      <rect x="155.56" y="58.33" width="38.89" height="19.44"/>
+      <rect x="291.67" y="58.33" width="38.89" height="19.44"/>
+      <rect x="0.0" y="77.78" width="77.78" height="38.89"/>
+      <rect x="77.78" y="77.78" width="19.44" height="19.44"/>
+      <rect x="116.67" y="77.78" width="38.89" height="38.89"/>
+      <rect x="272.22" y="77.78" width="19.44" height="19.44"/>
+      <rect x="291.67" y="77.78" width="38.89" height="38.89"/>
+      <rect x="330.56" y="77.78" width="19.44" height="19.44"/>
+      <rect x="388.89" y="77.78" width="38.89" height="38.89"/>
+      <rect x="447.22" y="77.78" width="19.44" height="19.44"/>
+      <rect x="466.67" y="77.78" width="19.44" height="38.89"/>
+      <rect x="525.0" y="77.78" width="38.89" height="38.89"/>
+      <rect x="622.22" y="77.78" width="38.89" height="38.89"/>
+      <rect x="155.56" y="97.22" width="77.78" height="19.44"/>
+      <rect x="486.11" y="97.22" width="19.44" height="19.44"/>
+  </g>
+
+  <!-- Tagline -->
+  <text x="640" y="395" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="30" fill="#8b949e" letter-spacing="1">
+    A fast Rust CLI for Jev
+  </text>
+
+  <!-- Success indicator -->
+  <text x="640" y="460" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Monaco, monospace" font-size="20" fill="#3fb950">
+    ✓ Typed decisions · Agent-friendly · Lint before you bill
+  </text>
+</svg>
