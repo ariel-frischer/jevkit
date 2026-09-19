@@ -334,43 +334,10 @@ one, for 39% more cost:
 So batch questions into one request rather than looping. Ten thin calls would
 have cost ten round trips and ten times the base overhead.
 
-## Continuous integration
-
-GitHub Actions runs on push and pull request.
-
-| Job | Runs |
-|---|---|
-| fmt | `cargo fmt --check` |
-| clippy | `cargo clippy --all-targets -- -D warnings` |
-| test | offline tests only, no API key or network required |
-| build | `cargo build --release` |
-| msrv | the 1.88 minimum supported Rust version |
-| cargo-deny | dependency advisory audit, weekly |
-
-## Notes on the API
-
-- Decisions go to `/api/alpha/decisions`. Jev rejects `/v1/chat/completions`.
-- **A `noul` answer is a probability in `[0,1]`, not a boolean.** Treating it as
-  truthy makes every answer "yes". There is deliberately no `as_bool()` helper
-  in this codebase: pick a threshold explicitly.
-- `criteria` is required for `choice` and `score`, optional for `noul`.
-- `noul` answers carry no `confidence` field. Only `choice` and `score` do.
-  Derive uncertainty from the probability's distance from 0.5.
-- The context limit is 32k tokens, counted over the whole payload. Note that
-  `jev`'s local estimate is a crude chars/4 heuristic and measures high: a
-  payload it estimated at 38,751 tokens was reported by the API as 31,272 and
-  succeeded. So a near-limit payload only warns, and `--raw` reports the real
-  `usage.input_tokens`.
-
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 guidelines; CI runs fmt, clippy, offline tests, and the MSRV build.
-
-## Scope
-
-Three commands, deliberately. Saved recipes, batch processing, and calibration
-sweeps are plausible next steps but are not here yet.
 
 ## License
 
