@@ -55,6 +55,7 @@ that teaches a coding agent to drive the CLI; agents can also consume it via
 
 - 🎯 **Typed questions**: `noul` (probability), `choice` (label), `score` (level), sent in terse YAML or JSON, by file, stdin, or `--question-set` inline
 - 🦀 **Offline linting**: 13 rules that catch billed-but-useless questions before a call; documented exit codes for CI
+- 🔩 **Machine-first I/O**: JSON on stdout (compact when piped, pretty on a TTY; `--compact`/`--pretty` to force), diagnostics on stderr, `0/1/2` exit codes (ok / usage·API / lint-rejected)
 - 📊 **Usage ledger**: `jev ask --log` appends one JSON line per call (request, response, tokens, cost) to `~/.local/state/jev/usage.jsonl`
 - 🛠 **Config**: user defaults in `~/.config/jev/config.toml` (`provider`, `model`, `log`), layered flags > env > config > defaults
 - 🔐 **Keyring auth**: keys stored in the OS credential store, never argv or shell history; fingerprint display rather than the key itself
@@ -151,20 +152,9 @@ jev ask -q questions.yaml --raw                # full response with usage and co
 `jev lint --question-set` works the same way.
 
 Linting runs automatically. Errors block the call, warnings print to stderr and
-proceed. Warnings go to stderr specifically so that piping stdout to `jq` stays
-safe.
-
-JSON output is pretty-printed on a terminal and one-line when stdout is a pipe,
-so `jev ask ... | jq` gets compact JSON by default. Pass `--pretty` to force the
-indented form in scripts, or `--compact` to force one-line everywhere; the two
-flags are mutually exclusive.
-
-Exit codes for `ask`, for use in scripts and pipelines:
-
-- `0` the call succeeded, JSON on stdout
-- `1` usage, credential, or API failure
-- `2` lint errors (pass `--no-lint` to proceed); nothing was sent, nothing was
-  billed, and stdout is empty
+proceed, so piping stdout to `jq` stays safe. Exit codes: `0` success, `1`
+usage/credential/API failure, `2` lint errors -- nothing sent, nothing billed.
+JSON is compact when piped, pretty on a TTY; `--compact`/`--pretty` override.
 
 ### `jev lint`
 
@@ -183,10 +173,9 @@ Exit codes follow a documented contract, for use in scripts and CI:
 - `1` errors were found (the API would reject these), or warnings with `--strict`
 - `2` warnings only, which are heuristics rather than rejections
 
-`--json` prints the findings as machine-readable JSON with rule id, severity,
-message, path, and help -- pretty on a terminal, one-line when piped, with
-`--pretty`/`--compact` to override either way. Text mode prints findings to
-stdout so piping to `jq`
+`--json` prints machine-readable findings (rule, severity, message, path,
+help), compact when piped, with `--pretty`/`--compact` to override. Text mode
+prints findings to stdout so piping to `jq`
 stays safe. `--quiet` drops the help blocks and prints rule ids only, roughly
 cutting text output in half; useful when an agent or script consumes the ids.
 Shell completions and a man page are behind the hidden `completions`
