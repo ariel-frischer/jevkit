@@ -177,6 +177,16 @@ struct AskArgs {
     #[arg(long)]
     quiet: bool,
 
+    /// One-line JSON output. Implied when stdout is a pipe, so
+    /// `jev ask ... | jq` gets compact JSON; use --pretty to force the
+    /// indented form in scripts.
+    #[arg(long, conflicts_with = "pretty")]
+    compact: bool,
+
+    /// Pretty-print JSON output even when stdout is a pipe.
+    #[arg(long)]
+    pretty: bool,
+
     /// Groups related calls for observability. Never sent to the model.
     #[arg(long, value_name = "ID")]
     session_id: Option<String>,
@@ -189,6 +199,10 @@ struct AskArgs {
     /// Append this call to the usage ledger. Optional path; defaults to
     /// $XDG_STATE_HOME/jev/usage.jsonl (~/.local/state/jev/usage.jsonl).
     /// Can also be enabled with JEV_LOG_FILE=1 for the default path.
+    ///
+    /// Exit codes: 0 success, 1 usage/API/auth error, 2 lint errors
+    /// (pass --no-lint to proceed). JSON goes to stdout, diagnostics to
+    /// stderr, so `jev ask ... | jq` never sees warnings.
     #[arg(long, value_name = "FILE", num_args = 0..=1, default_missing_value = "")]
     log: Option<String>,
 }
@@ -209,6 +223,14 @@ struct LintArgs {
     /// Inline question set as a YAML or JSON string.
     #[arg(long, value_name = "QUESTIONS")]
     question_set: Option<String>,
+
+    /// One-line JSON output. Implied when stdout is a pipe.
+    #[arg(long, conflicts_with = "pretty")]
+    compact: bool,
+
+    /// Pretty-print JSON output even when stdout is a pipe.
+    #[arg(long)]
+    pretty: bool,
 
     /// Emit findings as JSON (rule, severity, message, path, help).
     #[arg(long)]
@@ -264,6 +286,19 @@ fn main() {
         eprintln!("error: {e:#}");
         std::process::exit(1);
     }
+}
+
+/// Serialize a JSON value for stdout: compact when piped (or --compact),
+/// pretty on a terminal (or --pretty). Scripts piping to jq get one-line
+/// JSON without asking; humans on a terminal get the indented form.
+fn emit_json(value: &serde_json::Value, compact: bool, pretty: bool) -> Result<()> {
+    let line = if compact || (!pretty && !std::io::stdout().is_terminal()) {
+        serde_json::to_string(value)?
+    } else {
+        serde_json::to_string_pretty(value)?
+    };
+    println!("{line}");
+    Ok(())
 }
 
 fn run() -> Result<()> {
@@ -460,15 +495,20 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
                     }
                 }
             }
-            bail!(
+            eprintln!(
                 "{} problem(s) would cause a failed or wasted call; fix them or pass --no-lint",
                 errors.len()
             );
+            // Exit 2 distinguishes "lint rejected the question set" from
+            // exit 1 "usage/API/auth failure"; documented on --log and in
+            // the README. No stdout was written, so a pipeline sees the
+            // nonzero status even though stderr carried the message.
+            std::process::exit(2);
         }
     }
 
     if args.dry_run {
-        println!("{}", serde_json::to_string_pretty(&request)?);
+        emit_json(&serde_json::to_value(&request)?, args.compact, args.pretty)?;
         return Ok(());
     }
 
@@ -540,7 +580,7 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
     let response = result?;
 
     if args.raw {
-        println!("{}", serde_json::to_string_pretty(&response)?);
+        emit_json(&serde_json::to_value(&response)?, args.compact, args.pretty)?;
         return Ok(());
     }
 
@@ -555,7 +595,7 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         };
         summary.insert(name.clone(), value);
     }
-    println!("{}", serde_json::to_string_pretty(&summary)?);
+    emit_json(&summary.into(), args.compact, args.pretty)?;
     Ok(())
 }
 
@@ -568,10 +608,11 @@ fn cmd_lint(args: LintArgs) -> Result<()> {
     let findings = lint::lint_questions(&questions);
 
     if args.json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&lint_json_payload(&findings))?
-        );
+        emit_json(
+            &lint_json_payload(&findings).into(),
+            args.compact,
+            args.pretty,
+        )?;
     } else if findings.is_empty() {
         println!("{} question(s), no problems found", questions.len());
     } else {

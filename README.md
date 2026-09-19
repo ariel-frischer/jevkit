@@ -154,6 +154,18 @@ Linting runs automatically. Errors block the call, warnings print to stderr and
 proceed. Warnings go to stderr specifically so that piping stdout to `jq` stays
 safe.
 
+JSON output is pretty-printed on a terminal and one-line when stdout is a pipe,
+so `jev ask ... | jq` gets compact JSON by default. Pass `--pretty` to force the
+indented form in scripts, or `--compact` to force one-line everywhere; the two
+flags are mutually exclusive.
+
+Exit codes for `ask`, for use in scripts and pipelines:
+
+- `0` the call succeeded, JSON on stdout
+- `1` usage, credential, or API failure
+- `2` lint errors (pass `--no-lint` to proceed); nothing was sent, nothing was
+  billed, and stdout is empty
+
 ### `jev lint`
 
 Validate a question set without touching the network.
@@ -172,7 +184,9 @@ Exit codes follow a documented contract, for use in scripts and CI:
 - `2` warnings only, which are heuristics rather than rejections
 
 `--json` prints the findings as machine-readable JSON with rule id, severity,
-message, path, and help. Text mode prints findings to stdout so piping to `jq`
+message, path, and help -- pretty on a terminal, one-line when piped, with
+`--pretty`/`--compact` to override either way. Text mode prints findings to
+stdout so piping to `jq`
 stays safe. `--quiet` drops the help blocks and prints rule ids only, roughly
 cutting text output in half; useful when an agent or script consumes the ids.
 Shell completions and a man page are behind the hidden `completions`
