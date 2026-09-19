@@ -48,4 +48,6 @@ tapes/
 
 # Local video workspace (Remotion project + renders + node_modules); never committed
 /video/
+.remotion/
+.cache/
 
