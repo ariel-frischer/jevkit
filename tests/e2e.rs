@@ -9,7 +9,6 @@
 //! on its own thread, so tests are parallel-safe and offline.
 
 use assert_cmd::Command;
-use std::io::Read as _;
 use tiny_http::{Header, Response, Server};
 
 /// A request that hits the mock server, for asserting on the wire payload.

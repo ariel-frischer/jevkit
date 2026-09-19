@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-19
+
+### Added
+
+- `jev ask` and `jev lint` pipe-aware JSON output with `--compact` and `--pretty` flags
+- Documented `ask` exit-code contract for scriptable callers
+- End-to-end tests exercising real HTTP round trips against a mock Decisions server
+
+### Changed
+
+- CLI output contract for machine-readable ask/lint output
 ## [0.2.0] - 2026-09-18
 
 ### Added
@@ -27,5 +38,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Crate version aligned with the release tag
 
-[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ariel-frischer/jevkit/compare/v0.1.0...v0.2.0

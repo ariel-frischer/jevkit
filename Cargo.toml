@@ -1,6 +1,6 @@
 [package]
 name = "jevkit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.88"
 description = "Fast Rust CLI for TypeSafe Jev: typed decisions, offline linting"
