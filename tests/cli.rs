@@ -106,7 +106,9 @@ fn lint_bad_file_json_includes_rule_field() {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .assert()
         .code(2)
-        .stdout(predicates::str::is_match("\"rule\": \"").unwrap());
+        // Compact when piped (the assert harness captures stdout), so no
+        // space after the colon; the stable contract is the `"rule"` key.
+        .stdout(predicates::str::is_match("\"rule\": ?\"").unwrap());
 }
 
 /// Stdout/stderr separation contract: all of `lint`'s output (summary,
@@ -279,6 +281,126 @@ fn lint_inline_question_set_json_outputs_empty_array() {
         .assert()
         .success()
         .stdout(predicates::str::contains("[]"));
+}
+
+/// Compact default when stdout is a pipe: JSON is one line, no indentation.
+/// The test harness captures stdout, so this exercises exactly the piped
+/// path a script gets.
+#[test]
+fn ask_dry_run_compacts_when_piped() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "--dry-run",
+            "state",
+        ])
+        .output()
+        .expect("dry-run runs");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert_eq!(stdout.lines().count(), 1, "one line when piped: {stdout}");
+    serde_json::from_str::<serde_json::Value>(&stdout).expect("piped output is valid JSON");
+}
+
+/// --pretty overrides the pipe default, same byte-for-byte form as a
+/// terminal run.
+#[test]
+fn ask_dry_run_pretty_forces_indentation() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "--dry-run",
+            "state",
+            "--pretty",
+        ])
+        .output()
+        .expect("dry-run runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("\n  "),
+        "pretty output must be indented, got:\n{stdout}"
+    );
+}
+
+/// Ask without lint reports lint errors with exit code 2, so a pipeline can
+/// distinguish "the question set is broken" from exit 1 "usage/API failure".
+/// Compare with the generic path, which is exit 1.
+#[test]
+fn ask_lint_errors_exit_2() {
+    // Empty instructions is an error-severity rule (`empty-instructions`),
+    // which is what trips exit 2. (A score with empty instructions would
+    // fail earlier, at parse time, which is exit 1.)
+    let inline = r#"{"s":{"type":"noul","instructions":""}}"#;
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["ask", "--question-set", inline, "state"])
+        .output()
+        .expect("ask runs");
+    assert_eq!(output.status.code(), Some(2), "lint errors exit 2");
+    // Nothing on stdout: a downstream jq must not see partial JSON.
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("error["), "reason on stderr: {stderr}");
+}
+
+/// Generic failures -- a bad file path, a missing questions source -- keep
+/// exit 1 so `? 2` can only mean lint.
+#[test]
+fn ask_generic_failure_exit_1() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["ask", "--questions", "does/not/exist.yaml", "state"])
+        .assert()
+        .code(1);
+}
+
+/// --compact on lint --json gives one-line JSON, same shape, no indentation.
+#[test]
+fn lint_json_compact_is_one_line() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "--json", "--compact", "examples/bad-questions.yaml"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("lint runs");
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert_eq!(stdout.lines().count(), 1, "one line: {stdout}");
+    serde_json::from_str::<serde_json::Value>(&stdout).expect("compact --json still parses");
+}
+
+/// --pretty on lint --json keeps the indented form even though the harness
+/// captures stdout (which would otherwise imply compact).
+#[test]
+fn lint_json_pretty_forces_indentation() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args(["lint", "--json", "--pretty", "examples/bad-questions.yaml"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .code(2)
+        .stdout(predicates::str::is_match("\n    \"rule\"").unwrap());
+}
+
+/// --compact and --pretty are mutually exclusive on both commands.
+#[test]
+fn compact_and_pretty_conflict() {
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "lint",
+            "--json",
+            "--compact",
+            "--pretty",
+            "examples/bad-questions.yaml",
+        ])
+        .assert()
+        .failure();
 }
 
 /// Passing --question-set and both questions unset behaves as before: ask
