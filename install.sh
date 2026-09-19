@@ -210,10 +210,8 @@ main() {
     echo ""
     printf '%b%s\n' "${GREEN}" '   ██ ██████ ██  ██ ██ ▄█▀ ██ ██████'
     printf '%b%s\n' "${GREEN}" '   ██ ██▄▄   ██▄▄██ ████   ██   ██  '
-    printf '%b%s\n' "${GREEN}" '   ██ ██▄▄▄▄  ▀██▀  ██ ▀█▄ ██   ██  '
     printf '%b%s\n' "${GREEN}" '████▀ ██▄▄▄▄  ▀██▀  ██ ▀█▄ ██   ██ '
-    printf '%s%b%s\n' '████▀ ' "${NC}" 'jevkit'
-    echo "         Installer"
+    echo "jevkit Installer"
     echo ""
 
     check_dependencies
