@@ -1,6 +1,8 @@
 project: jevkit
 versions:
-    unreleased:
+    unreleased: {}
+    0.4.0:
+        date: 2026-09-26
         added:
             - '`jev lint` accepts several files (`jev lint *.yaml`); findings are prefixed with the file name, `--json` findings gain a `file` field, and an unreadable file is reported without stopping the rest'
             - '`jev ask --noul TEXT`: inline yes/no questions, repeatable, named `q1`, `q2`, ...'

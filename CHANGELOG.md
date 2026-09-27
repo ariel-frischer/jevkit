@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-26
+
 ### Added
 
 - `jev lint` accepts several files (`jev lint *.yaml`); findings are prefixed with the file name, `--json` findings gain a `file` field, and an unreadable file is reported without stopping the rest
@@ -47,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Crate version aligned with the release tag
 
-[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ariel-frischer/jevkit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ariel-frischer/jevkit/compare/v0.1.0...v0.2.0
