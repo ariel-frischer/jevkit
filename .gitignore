@@ -51,3 +51,5 @@ tapes/
 .remotion/
 .cache/
 
+# Promo video sources: tracked on the orphan `promo` branch, checked out here as a worktree
+/promo/
