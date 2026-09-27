@@ -186,6 +186,106 @@ fn lint_missing_file_fails() {
         .failure();
 }
 
+/// Several files lint in one run: findings carry their file name, and one
+/// unreadable file is reported without hiding findings in the others.
+#[test]
+fn lint_multiple_files_reports_each_and_fails_on_unreadable() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "lint",
+            "examples/severity.yaml",
+            "examples/does-not-exist.yaml",
+            "examples/bad-questions.yaml",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("lint runs");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "unreadable file fails the run"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("examples/bad-questions.yaml: warning[single-option]"));
+    assert!(!stdout.contains("examples/severity.yaml:"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("examples/does-not-exist.yaml"));
+}
+
+/// `--json` over several files tags each finding with its file.
+#[test]
+fn lint_multiple_files_json_tags_file() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "lint",
+            "--json",
+            "examples/severity.yaml",
+            "examples/bad-questions.yaml",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("lint runs");
+    assert_eq!(output.status.code(), Some(2), "warnings only");
+    let findings: serde_json::Value = serde_json::from_slice(&output.stdout).expect("json");
+    let findings = findings.as_array().expect("array");
+    assert!(!findings.is_empty());
+    assert!(findings
+        .iter()
+        .all(|f| f["file"] == "examples/bad-questions.yaml"));
+}
+
+/// `--noul` adds inline questions as q1, q2, ... alongside a question set.
+#[test]
+fn ask_noul_merges_with_question_set() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            CLEAN_INLINE_JSON,
+            "--noul",
+            "Does the text describe physical danger to a person?",
+            "--noul",
+            "Does the text describe an action that cannot be undone?",
+            "--dry-run",
+            "state",
+        ])
+        .output()
+        .expect("ask runs");
+    assert!(output.status.success());
+    let request: serde_json::Value = serde_json::from_slice(&output.stdout).expect("json");
+    let questions = &request["questions"];
+    assert_eq!(questions["risky"]["type"], "noul");
+    assert_eq!(
+        questions["q1"]["instructions"],
+        "Does the text describe physical danger to a person?"
+    );
+    assert_eq!(questions["q2"]["type"], "noul");
+}
+
+/// A `--noul` name that collides with a question in the set is an error, not
+/// a silent overwrite.
+#[test]
+fn ask_noul_name_collision_fails() {
+    let output = Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .args([
+            "ask",
+            "--question-set",
+            r#"{"q1":{"type":"noul","instructions":"Is this text dangerous?"}}"#,
+            "--noul",
+            "Does the text describe physical danger to a person?",
+            "--dry-run",
+            "state",
+        ])
+        .output()
+        .expect("ask runs");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("q1"));
+}
+
 // ---------------------------------------------------------------------------
 // --question-set: question sets passed inline as CLI strings, no file needed.
 // ---------------------------------------------------------------------------

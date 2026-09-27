@@ -63,10 +63,12 @@ jev ask -q questions.yaml --no-lint      # send anyway, defects and all
 
 # lint: never touches the network
 jev lint questions.yaml
+jev lint prompts/*.yaml                  # several files; findings prefixed with the file name
 jev lint --json questions.yaml           # machine-readable findings
 jev lint --strict questions.yaml         # exit 1 on warnings, for CI (alias: --deny-warnings)
 
 # inline: question set as a CLI string, no file
+jev ask --noul "Does the text describe an irreversible action?" "some text"   # yes/no, named q1; repeatable
 jev ask --question-set '{"risky":{"type":"noul","instructions":"Risky?"}}' "some text"
 jev lint --question-set 'risky:
   noul: Is this dangerous?'

@@ -191,10 +191,15 @@ struct AskArgs {
     #[arg(long, value_name = "ID")]
     session_id: Option<String>,
 
-    /// Inline question set as a YAML or JSON string. Takes precedence over
-    /// --questions; useful for one-off calls without a temp file.
-    #[arg(long, value_name = "QUESTIONS")]
+    /// Inline question set as a YAML or JSON string; useful for one-off calls
+    /// without a temp file.
+    #[arg(long, value_name = "QUESTIONS", conflicts_with = "questions")]
     question_set: Option<String>,
+
+    /// Add a yes/no question inline, answered as a probability. Repeatable;
+    /// named q1, q2, ... in order. Combines with --questions/--question-set.
+    #[arg(long, value_name = "TEXT")]
+    noul: Vec<String>,
 
     /// Append this call to the usage ledger. Optional path; defaults to
     /// $XDG_STATE_HOME/jev/usage.jsonl (~/.local/state/jev/usage.jsonl).
@@ -209,9 +214,9 @@ struct AskArgs {
 
 #[derive(Args)]
 struct LintArgs {
-    /// Question set file (YAML or JSON). Reads stdin when omitted.
+    /// Question set files (YAML or JSON). Reads stdin when omitted.
     #[arg(value_name = "FILE")]
-    file: Option<PathBuf>,
+    files: Vec<PathBuf>,
 
     /// Exit 1 when warnings are found, not just errors. Intended for CI.
     ///
@@ -221,7 +226,7 @@ struct LintArgs {
     strict: bool,
 
     /// Inline question set as a YAML or JSON string.
-    #[arg(long, value_name = "QUESTIONS")]
+    #[arg(long, value_name = "QUESTIONS", conflicts_with = "files")]
     question_set: Option<String>,
 
     /// One-line JSON output. Implied when stdout is a pipe.
@@ -426,12 +431,25 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         bail!("both the questions and the state would come from stdin; pass one of them as a file or an argument");
     }
 
-    let question_src = match (&args.questions, args.question_set.as_deref()) {
-        (Some(path), _) => read_source(Some(path))?,
-        (_, Some(inline)) => inline.to_string(),
-        (None, None) => bail!("no questions given; pass --questions FILE"),
+    let mut questions = match (&args.questions, args.question_set.as_deref()) {
+        (Some(path), _) => input::parse_questions(&read_source(Some(path))?)?,
+        (_, Some(inline)) => input::parse_questions(inline)?,
+        (None, None) => Default::default(),
     };
-    let questions = input::parse_questions(&question_src)?;
+    for (i, text) in args.noul.iter().enumerate() {
+        let name = format!("q{}", i + 1);
+        if questions.contains_key(&name) {
+            bail!("--noul would be named {name:?}, but the question set already has a question with that name");
+        }
+        let question = types::Question::Noul {
+            instructions: text.clone().into(),
+            criteria: None,
+        };
+        questions.insert(name, question);
+    }
+    if questions.is_empty() {
+        bail!("no questions given; pass --questions FILE, --question-set, or --noul TEXT");
+    }
 
     let state_text = match (&args.state, &args.file) {
         (Some(s), _) => s.clone(),
@@ -600,29 +618,59 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
 }
 
 fn cmd_lint(args: LintArgs) -> Result<()> {
-    let src = match args.question_set.as_deref() {
-        Some(inline) => inline.to_string(),
-        None => read_source(args.file.as_deref())?,
+    // (label, source). The label is the file name, None for stdin or inline.
+    let sources: Vec<(Option<String>, Result<String>)> = match args.question_set {
+        Some(inline) => vec![(None, Ok(inline))],
+        None if args.files.is_empty() => vec![(None, read_source(None))],
+        None => args
+            .files
+            .iter()
+            .map(|p| (Some(p.display().to_string()), read_source(Some(p))))
+            .collect(),
     };
-    let questions = input::parse_questions(&src)?;
-    let findings = lint::lint_questions(&questions);
+    // Like grep: prefix findings with the file name only when there are
+    // several files, so single-file output is unchanged.
+    let multi = sources.len() > 1;
+
+    let mut failed = false;
+    let mut question_count = 0;
+    let mut all: Vec<(Option<String>, lint::Finding)> = Vec::new();
+    for (label, src) in sources {
+        let parsed = src.and_then(|s| input::parse_questions(&s));
+        let questions = match parsed {
+            Ok(q) => q,
+            // One file: fail as before. Several: report, lint the rest.
+            Err(e) if !multi => return Err(e),
+            Err(e) => {
+                eprintln!("error: {}: {e:#}", label.as_deref().unwrap_or("-"));
+                failed = true;
+                continue;
+            }
+        };
+        question_count += questions.len();
+        let findings = lint::lint_questions(&questions);
+        all.extend(findings.into_iter().map(|f| (label.clone(), f)));
+    }
 
     if args.json {
-        emit_json(
-            &lint_json_payload(&findings).into(),
-            args.compact,
-            args.pretty,
-        )?;
-    } else if findings.is_empty() {
-        println!("{} question(s), no problems found", questions.len());
+        emit_json(&lint_json_payload(&all).into(), args.compact, args.pretty)?;
+    } else if all.is_empty() && !failed {
+        println!("{question_count} question(s), no problems found");
     } else {
         // Findings go to stdout: `jev lint file.yaml | jq` should see them.
         // (In `ask`, lint warnings are on stderr instead; there stdout carries
         // the model's answers.)
         let quiet = args.quiet
             || config::resolved_lint_verbosity(&config::load()?)? == LintVerbosity::Quiet;
-        for f in &findings {
-            println!("{}[{}]: {}: {}", f.severity, f.rule, f.path, f.message);
+        for (label, f) in &all {
+            let prefix = match label {
+                Some(file) if multi => format!("{file}: "),
+                _ => String::new(),
+            };
+            println!(
+                "{prefix}{}[{}]: {}: {}",
+                f.severity, f.rule, f.path, f.message
+            );
             if !quiet {
                 if let Some(help) = &f.help {
                     println!("  help: {help}");
@@ -631,19 +679,26 @@ fn cmd_lint(args: LintArgs) -> Result<()> {
         }
     }
 
-    let code = lint_exit_code(&findings, args.strict);
+    let findings: Vec<lint::Finding> = all.into_iter().map(|(_, f)| f).collect();
+    let code = if failed {
+        1
+    } else {
+        lint_exit_code(&findings, args.strict)
+    };
     if code != 0 {
         std::process::exit(code);
     }
     Ok(())
 }
 
-/// The `--json` shape: rule id, severity string, location, message, help.
-fn lint_json_payload(findings: &[lint::Finding]) -> Vec<serde_json::Value> {
+/// The `--json` shape: file (null for stdin or inline), rule id, severity
+/// string, location, message, help.
+fn lint_json_payload(findings: &[(Option<String>, lint::Finding)]) -> Vec<serde_json::Value> {
     findings
         .iter()
-        .map(|f| {
+        .map(|(file, f)| {
             serde_json::json!({
+                "file": file,
                 "severity": f.severity.to_string(),
                 "rule": f.rule,
                 "path": f.path,
@@ -789,8 +844,8 @@ fn print_init_outro(provider_name: &str) {
          \n  jev lint examples/severity.yaml\n\
          \n  # ask your first real question ( costs a tiny API call ):\n\
          \n  jev ask -q examples/severity.yaml \"The deploy script drops prod with no confirmation.\"\n\
-         \n  # one-liner with an inline question set:\n\
-         \n  jev ask --question-set '{{\"risky\":{{\"type\":\"noul\",\"instructions\":\"Is this risky?\"}}}}' \"jumping into a volcano\""
+         \n  # one-liner with an inline yes/no question:\n\
+         \n  jev ask --noul \"Is this risky?\" \"jumping into a volcano\""
     );
 }
 
@@ -949,19 +1004,24 @@ fn read_source(path: Option<&std::path::Path>) -> Result<String> {
 mod cli_tests {
     use super::*;
 
-    /// The exact JSON contract for `jev lint --json`: every finding carries a
-    /// rule id, a severity string, a message, a location, and optional help.
+    /// The exact JSON contract for `jev lint --json`: every finding carries
+    /// its file, a rule id, a severity string, a message, a location, and
+    /// optional help.
     #[test]
     fn json_output_has_required_fields() {
-        let findings = vec![lint::Finding {
-            severity: Severity::Warning,
-            rule: "degenerate-criteria",
-            path: "questions.scheme.criteria".to_string(),
-            message: "msg".to_string(),
-            help: Some("hit".to_string()),
-        }];
+        let findings = vec![(
+            Some("a.yaml".to_string()),
+            lint::Finding {
+                severity: Severity::Warning,
+                rule: "degenerate-criteria",
+                path: "questions.scheme.criteria".to_string(),
+                message: "msg".to_string(),
+                help: Some("hit".to_string()),
+            },
+        )];
         let payload = lint_json_payload(&findings);
         let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json[0]["file"], "a.yaml");
         assert_eq!(json[0]["rule"], "degenerate-criteria");
         assert_eq!(json[0]["severity"], "warning");
         assert_eq!(json[0]["path"], "questions.scheme.criteria");
@@ -1018,26 +1078,6 @@ mod cli_tests {
             assert_eq!(p.name, name);
         }
         assert!(auth::provider_by_name("not-a-provider").is_err());
-    }
-
-    /// The outro names the provider and every line that starts with `jev `
-    /// parses as a jev command, so a user copying it cannot hit a typo.
-    #[test]
-    fn init_outro_names_provider_and_runnable_commands() {
-        // Scrub the out println by pattern-matching against the real sender
-        // would capture a pipe; instead pin the contract textually.
-        let expected_framework = "Done — jev is set up with {provider}";
-        let _ = expected_framework;
-        let sample = format!(
-            "Done — jev is set up with {}. Try it:\n\n  # lint a question set offline, free:\n\n  jev lint examples/severity.yaml\n\n  # ask your first real question ( costs a tiny API call ):\n\n  jev ask -q examples/severity.yaml \"The deploy script drops prod with no confirmation.\"\n\n  # one-liner with an inline question set:\n\n  jev ask --question-set '{{\"risky\":{{\"type\":\"noul\",\"instructions\":\"Is this risky?\"}}}}' \"jumping into a volcano\"",
-            "openrouter"
-        );
-        assert!(sample.contains("openrouter"));
-        assert!(sample.contains("jev lint"));
-        assert!(sample.contains("jev ask -q"));
-        assert!(sample.contains("jev ask --question-set"));
-        // Examples referenced by the outro exist in the repo.
-        assert!(PathBuf::from("examples/severity.yaml").exists());
     }
 
     /// validate_https_url is what guards the custom-endpoint flow.
