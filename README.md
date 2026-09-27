@@ -38,12 +38,12 @@ $ jev ask -q severity.yaml "The deploy script drops the production database with
 }
 ```
 
-No file, either: a question set passed inline is a one-liner.
+No file, either: a yes/no question passed inline is a one-liner.
 
 ```console
-$ jev ask --question-set '{"risky":{"type":"noul","instructions":"Is this risky?"}}' "jumping into a volcano"
+$ jev ask --noul "Is this risky?" "jumping into a volcano"
 {
-  "risky": 0.97
+  "q1": 0.97
 }
 ```
 
@@ -53,7 +53,7 @@ that teaches a coding agent to drive the CLI; agents can also consume it via
 
 ## Features
 
-- 🎯 **Typed questions**: `noul` (probability), `choice` (label), `score` (level), sent in terse YAML or JSON, by file, stdin, or `--question-set` inline
+- 🎯 **Typed questions**: `noul` (probability), `choice` (label), `score` (level), sent in terse YAML or JSON, by file, stdin, `--question-set` inline, or `--noul TEXT` for a quick yes/no
 - 🦀 **Offline linting**: 13 rules that catch billed-but-useless questions before a call; documented exit codes for CI
 - 🔩 **Machine-first I/O**: JSON on stdout (compact when piped, pretty on a TTY; `--compact`/`--pretty` to force), diagnostics on stderr, `0/1/2` exit codes (ok / usage·API / lint-rejected)
 - 📊 **Usage ledger**: `jev ask --log` appends one JSON line per call (request, response, tokens, cost) to `~/.local/state/jev/usage.jsonl`
@@ -146,10 +146,11 @@ jev ask -q questions.yaml "some text"          # state as an argument
 
 jev ask -q questions.yaml --dry-run            # print the payload, send nothing
 jev ask -q questions.yaml --raw                # full response with usage and cost
+jev ask --noul "Is this risky?" "some text"    # inline yes/no; repeatable, named q1, q2, ...
 ```
 
-```console
-`jev lint --question-set` works the same way.
+`--noul` combines with `-q`/`--question-set`. `jev lint --question-set` works
+the same way.
 
 Linting runs automatically. Errors block the call, warnings print to stderr and
 proceed, so piping stdout to `jq` stays safe. Exit codes: `0` success, `1`
@@ -162,6 +163,7 @@ Validate a question set without touching the network.
 
 ```bash
 jev lint questions.yaml
+jev lint prompts/*.yaml                 # several files; findings prefixed with the file name
 jev lint --json questions.yaml          # machine-readable findings
 jev lint --strict questions.yaml        # warnings fail CI (alias: --deny-warnings)
 jev lint --quiet questions.yaml         # rule ids only, no help blocks

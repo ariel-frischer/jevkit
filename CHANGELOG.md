@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `jev lint` accepts several files (`jev lint *.yaml`); findings are prefixed with the file name, `--json` findings gain a `file` field, and an unreadable file is reported without stopping the rest
+- `jev ask --noul TEXT`: inline yes/no questions, repeatable, named `q1`, `q2`, ...
+
+### Fixed
+
+- `jev ask --questions` and `--question-set` together now error instead of silently ignoring the inline set
+
 ## [0.3.0] - 2026-09-19
 
 ### Added
