@@ -13,11 +13,12 @@
 
 </div>
 
-
 [TypeSafe’s Jev](https://docs.typesafe.ai) returns typed decisions instead of
 prose. `jevkit` is a CLI for it: ask Jev questions about a passage, get back
 probabilities, labels, and scores. `jev lint` validates a question set offline,
 before you spend anything on a call.
+
+https://github.com/user-attachments/assets/4a9ef3b7-e0a5-452c-a6f7-e242613fa438
 
 ## Install
 
