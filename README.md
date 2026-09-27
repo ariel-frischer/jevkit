@@ -24,7 +24,14 @@ https://github.com/user-attachments/assets/4a9ef3b7-e0a5-452c-a6f7-e242613fa438
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ariel-frischer/jevkit/main/install.sh | sh
+# or, with a Rust toolchain:
+cargo install jevkit-cli
 ```
+
+> [!NOTE]
+> The crates.io package is **`jevkit-cli`**, not `jevkit`. The `jevkit` crate on
+> crates.io is an unrelated project by another author. Both install paths give
+> you the same `jev` binary.
 
 More ways to install: see [Installation details](#installation-details).
 
@@ -101,8 +108,7 @@ tool does not claim otherwise.
 cargo install jevkit-cli  # installs the `jev` binary
 ```
 
-The crate is `jevkit-cli`: the `jevkit` name on crates.io belongs to an
-unrelated project.
+Not the `jevkit` crate, which is unrelated; see the note under [Install](#install).
 
 ### Build from source
 
