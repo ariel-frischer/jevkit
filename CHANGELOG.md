@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-26
+
+### Changed
+
+- Published to crates.io as `jevkit-cli` (`cargo install jevkit-cli`); the `jevkit` crate name belongs to an unrelated project. The binary is still `jev`
+
 ## [0.4.0] - 2026-09-26
 
 ### Added
@@ -49,7 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Crate version aligned with the release tag
 
-[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ariel-frischer/jevkit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ariel-frischer/jevkit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ariel-frischer/jevkit/compare/v0.1.0...v0.2.0

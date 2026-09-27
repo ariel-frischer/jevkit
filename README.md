@@ -94,6 +94,15 @@ tool does not claim otherwise.
 
 ## Installation details
 
+### From crates.io
+
+```bash
+cargo install jevkit-cli  # installs the `jev` binary
+```
+
+The crate is `jevkit-cli`: the `jevkit` name on crates.io belongs to an
+unrelated project.
+
 ### Build from source
 
 ```bash

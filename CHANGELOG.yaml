@@ -1,6 +1,10 @@
 project: jevkit
 versions:
     unreleased: {}
+    0.4.1:
+        date: 2026-09-26
+        changed:
+            - 'Published to crates.io as `jevkit-cli` (`cargo install jevkit-cli`); the `jevkit` crate name belongs to an unrelated project. The binary is still `jev`'
     0.4.0:
         date: 2026-09-26
         added:
