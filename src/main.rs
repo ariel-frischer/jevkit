@@ -541,12 +541,7 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
     // Ledger resolution: an explicit --log path wins; a bare --log consults
     // the config's log setting, then the default XDG state path.
     let log_arg = args.log.clone();
-    let ledger_requested = log_arg.is_some()
-        || std::env::var_os("JEV_LOG_FILE").is_some()
-        || matches!(
-            config::resolved_log(&defaults)?,
-            config::LogSetting::DefaultPath | config::LogSetting::Path(_)
-        );
+    let ledger_requested = log_arg.is_some() || std::env::var_os("JEV_LOG_FILE").is_some();
     if ledger_requested {
         let record_request = serde_json::to_value(&request)
             .context("failed to serialize the request for the usage ledger")?;
@@ -557,11 +552,8 @@ fn cmd_ask(args: AskArgs) -> Result<()> {
         {
             Some(p) => p,
             None => match config::resolved_log(&defaults)? {
-                config::LogSetting::Path(p) => p,
-                _ => match std::env::var_os("JEV_LOG_FILE").map(std::path::PathBuf::from) {
-                    Some(p) => p,
-                    None => usage::resolve_log_path(None)?,
-                },
+                config::LogSetting::Path(p) if log_arg.is_some() => p,
+                _ => usage::resolve_log_path(None)?,
             },
         };
         let call_result = {
