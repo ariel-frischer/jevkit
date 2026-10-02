@@ -1,10 +1,13 @@
 project: jevkit
 versions:
-    unreleased: {}
+    unreleased:
+        fixed:
+            - A configured log path no longer enables the usage ledger implicitly; logging needs --log or JEV_LOG_FILE, and JEV_LOG_FILE=1 selects the default XDG path
+            - Usage ledger fingerprints --api-key=KEY values like the space-separated form
     0.4.1:
         date: 2026-09-26
         changed:
-            - 'Published to crates.io as `jevkit-cli` (`cargo install jevkit-cli`); the `jevkit` crate name belongs to an unrelated project. The binary is still `jev`'
+            - Published to crates.io as `jevkit-cli` (`cargo install jevkit-cli`); the `jevkit` crate name belongs to an unrelated project. The binary is still `jev`
     0.4.0:
         date: 2026-09-26
         added:
