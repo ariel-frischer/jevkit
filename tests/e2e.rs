@@ -57,6 +57,73 @@ fn spawn_mock(status: u16, body: &'static str) -> (String, std::sync::mpsc::Rece
 const CLEAN_SET: &str = r#"{"risk":{"type":"noul","instructions":"Is this text dangerous?"}}"#;
 const CLEAN_KEY: &str = "test-key-e2e";
 
+#[test]
+fn e2e_ask_config_log_requires_log_flag() {
+    let dir = std::env::temp_dir().join(format!("jev-config-log-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create temp config dir");
+    let ledger = dir.join("usage.jsonl");
+    let (endpoint, _rx) = spawn_mock(
+        200,
+        r#"{"model":"m","answers":{"risk":{"type":"noul","noul":0.23}}}"#,
+    );
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .env("XDG_CONFIG_HOME", &dir)
+        .args(["config", "set", "log"])
+        .arg(&ledger)
+        .assert()
+        .success();
+
+    for log in [false, true] {
+        let mut command = Command::cargo_bin("jev").expect("jev binary builds");
+        command
+            .env("XDG_CONFIG_HOME", &dir)
+            .env("JEV_ENDPOINT", &endpoint)
+            .env("JEV_API_KEY", CLEAN_KEY)
+            .env_remove("JEV_LOG")
+            .env_remove("JEV_LOG_FILE")
+            .args(["ask", "--question-set", CLEAN_SET, "private passage"]);
+        if log {
+            command.arg("--log");
+        }
+        command.assert().success();
+        assert_eq!(ledger.exists(), log, "config alone must not enable logging");
+    }
+    let contents = std::fs::read_to_string(&ledger).expect("explicitly requested ledger");
+    let record: serde_json::Value = serde_json::from_str(contents.trim()).expect("one record");
+    assert_eq!(record["request"]["state"], "private passage");
+    assert_eq!(record["status"], "ok");
+    std::fs::remove_dir_all(&dir).expect("remove temp config dir");
+}
+
+#[test]
+fn e2e_ask_log_file_one_uses_default_path() {
+    let dir = std::env::temp_dir().join(format!("jev-env-log-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create temp state dir");
+    let (endpoint, _rx) = spawn_mock(
+        200,
+        r#"{"model":"m","answers":{"risk":{"type":"noul","noul":0.23}}}"#,
+    );
+    Command::cargo_bin("jev")
+        .expect("jev binary builds")
+        .current_dir(&dir)
+        .env("XDG_CONFIG_HOME", &dir)
+        .env("XDG_STATE_HOME", &dir)
+        .env("JEV_ENDPOINT", &endpoint)
+        .env("JEV_API_KEY", CLEAN_KEY)
+        .env_remove("JEV_LOG")
+        .env("JEV_LOG_FILE", "1")
+        .args(["ask", "--question-set", CLEAN_SET, "state"])
+        .assert()
+        .success();
+    let contents = std::fs::read_to_string(dir.join("jev/usage.jsonl"))
+        .expect("JEV_LOG_FILE=1 selects the XDG ledger");
+    let record: serde_json::Value = serde_json::from_str(contents.trim()).expect("one record");
+    assert_eq!(record["request"]["state"], "state");
+    assert!(!dir.join("1").exists(), "1 is not a literal filename");
+    std::fs::remove_dir_all(&dir).expect("remove temp state dir");
+}
+
 /// The happy path: clean question set, mock returns one noul answer.
 /// Stdout must be exactly one JSON object mapping the question name to the
 /// probability -- the summary contract scripts rely on.
