@@ -1,6 +1,8 @@
 project: jevkit
 versions:
-    unreleased:
+    unreleased: {}
+    0.4.2:
+        date: 2026-10-02
         fixed:
             - A configured log path no longer enables the usage ledger implicitly; logging needs --log or JEV_LOG_FILE, and JEV_LOG_FILE=1 selects the default XDG path
             - Usage ledger fingerprints --api-key=KEY values like the space-separated form

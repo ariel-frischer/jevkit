@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-02
+
 ### Fixed
 
 - A configured log path no longer enables the usage ledger implicitly; logging needs --log or JEV_LOG_FILE, and JEV_LOG_FILE=1 selects the default XDG path
@@ -48,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Cargo version now matches the v0.1.0 release tag
 
-[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ariel-frischer/jevkit/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/ariel-frischer/jevkit/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/ariel-frischer/jevkit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ariel-frischer/jevkit/compare/v0.2.0...v0.4.0
