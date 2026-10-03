@@ -3,7 +3,7 @@ set -euo pipefail
 
 BRANCH="${1:?Usage: worktree-setup.sh <branch-name> [base-branch]}"
 BASE="${2:-dev}"
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(dirname "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --path-format=absolute --git-common-dir)")"
 WORKTREE_DIR="$REPO_ROOT/.worktrees/$BRANCH"
 
 # Paths that live only in the main checkout and must never be copied into a
@@ -49,9 +49,16 @@ link_beads_db() {
 
   [ -e "$src_root/.beads" ] || return 0
 
-  if [ -e "$dst_root/.beads" ] || [ -L "$dst_root/.beads" ]; then
-    echo "beads database exists, preserving: $dst_root/.beads" >&2
-    return 0
+  [ -L "$dst_root/.beads" ] && return 0
+
+  if [ -e "$dst_root/.beads" ]; then
+    if [ -n "$(git -C "$dst_root" ls-files -- .beads)" ]; then
+      echo "worktree .beads is tracked by git; preserving repo choice" >&2
+      return 0
+    fi
+    echo "error: $dst_root/.beads is a separate copy of the beads database." >&2
+    echo "inspect it, remove it, and rerun to link $src_root/.beads" >&2
+    exit 1
   fi
 
   echo "linking canonical beads database: .beads" >&2

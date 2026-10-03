@@ -46,12 +46,15 @@ struct LedgerRecord<'a, R> {
 /// Resolve the target log path.
 ///
 /// Priority: explicit `--log` path > `JEV_LOG_FILE` env > XDG state dir.
+/// `JEV_LOG_FILE=1` selects the default XDG state path.
 pub fn resolve_log_path(explicit: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(p) = explicit {
         return Ok(p);
     }
     if let Some(p) = std::env::var_os("JEV_LOG_FILE") {
-        return Ok(PathBuf::from(p));
+        if p != "1" {
+            return Ok(PathBuf::from(p));
+        }
     }
     state_dir().map(|p| p.join("usage.jsonl"))
 }
@@ -70,12 +73,12 @@ fn state_dir() -> Result<PathBuf> {
     Ok(home.join("jev"))
 }
 
-/// The argv joined, with the value after `--api-key` redacted.
+/// The argv joined, with `--api-key` values redacted in either flag form.
 ///
 /// The exact invocation is usually the fastest way to reproduce a call, but
-/// argv is also the one place a key can enter this module: `--api-key KEY` is
-/// a supported flag. Fingerprint it like `auth status` does, so a record is
-/// still identifiable without being usable.
+/// argv is also the one place a key can enter this module: `--api-key KEY`
+/// and `--api-key=KEY` are supported. Fingerprint it like `auth status` does,
+/// so a record is still identifiable without being usable.
 fn redacted_invocation() -> String {
     redact_args(&std::env::args().collect::<Vec<String>>())
 }
@@ -87,6 +90,8 @@ fn redact_args(args: &[String]) -> String {
         if redact_next {
             out.push(crate::auth::fingerprint(arg));
             redact_next = false;
+        } else if let Some(key) = arg.strip_prefix("--api-key=") {
+            out.push(format!("--api-key={}", crate::auth::fingerprint(key)));
         } else {
             out.push(arg.clone());
             redact_next = arg == "--api-key";
@@ -212,6 +217,25 @@ mod tests {
         assert!(redacted.contains("--api-key"), "flag name stays visible");
         // The next flag's value is untouched.
         assert!(redacted.contains("--log"));
+    }
+
+    #[test]
+    fn invocation_redacts_equals_api_key_value() {
+        let args = vec![
+            "jev".to_string(),
+            "ask".to_string(),
+            "--api-key=SUPERSECRET-abc123xyz".to_string(),
+            "--log=usage.jsonl".to_string(),
+        ];
+        let redacted = redact_args(&args);
+        assert_eq!(
+            redacted,
+            format!(
+                "jev ask --api-key={} --log=usage.jsonl",
+                crate::auth::fingerprint("SUPERSECRET-abc123xyz")
+            )
+        );
+        assert!(!redacted.contains("SUPERSECRET"));
     }
 
     #[test]

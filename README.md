@@ -38,7 +38,7 @@ More ways to install: see [Installation details](#installation-details).
 ## Usage
 
 ```console
-$ jev ask -q severity.yaml "The deploy script drops the production database with no confirmation."
+$ jev ask -q examples/severity.yaml "The deploy script drops the production database with no confirmation."
 {
   "risky": 0.96,
   "severity": "high",
@@ -62,8 +62,8 @@ that teaches a coding agent to drive the CLI; agents can also consume it via
 ## Features
 
 - 🎯 **Typed questions**: `noul` (probability), `choice` (label), `score` (level), sent in terse YAML or JSON, by file, stdin, `--question-set` inline, or `--noul TEXT` for a quick yes/no
-- 🦀 **Offline linting**: 13 rules that catch billed-but-useless questions before a call; documented exit codes for CI
-- 🔩 **Machine-first I/O**: JSON on stdout (compact when piped, pretty on a TTY; `--compact`/`--pretty` to force), diagnostics on stderr, `0/1/2` exit codes (ok / usage·API / lint-rejected)
+- 🦀 **Offline linting**: 20 rules that catch billed-but-useless questions before a call; documented exit codes for CI
+- 🔩 **Machine-first I/O**: JSON on stdout (compact when piped, pretty on a TTY; `--compact`/`--pretty` to force), diagnostics on stderr, `0/1/2` exit codes (ok / input·credential·API failure / lint-rejected or bad arguments)
 - 📊 **Usage ledger**: `jev ask --log` appends one JSON line per call (request, response, tokens, cost) to `~/.local/state/jev/usage.jsonl`
 - 🛠 **Config**: user defaults in `~/.config/jev/config.toml` (`provider`, `model`, `log`), layered flags > env > config > defaults
 - 🔐 **Keyring auth**: keys stored in the OS credential store, never argv or shell history; fingerprint display rather than the key itself
@@ -123,8 +123,8 @@ jev init                 # provider, custom endpoint, key in the OS keyring
 ### Installer internals
 
 It downloads the matching prebuilt binary from GitHub Releases (linux
-x86_64/aarch64, macOS x86_64/aarch64), verifies the SHA-256 checksum, backs up an
-existing install, and warns if `~/.local/bin` is not on your `PATH`. Override the
+x86_64/aarch64, macOS x86_64/aarch64), verifies the SHA-256 checksum when one is
+published, and warns if `~/.local/bin` is not on your `PATH`. Override the
 version with `JEV_VERSION=v0.1.0`.
 
 ### Compatibility
@@ -170,7 +170,8 @@ the same way.
 
 Linting runs automatically. Errors block the call, warnings print to stderr and
 proceed, so piping stdout to `jq` stays safe. Exit codes: `0` success, `1`
-usage/credential/API failure, `2` lint errors -- nothing sent, nothing billed.
+input/credential/API failure, `2` lint errors (nothing sent, nothing billed) or invalid
+arguments.
 JSON is compact when piped, pretty on a TTY; `--compact`/`--pretty` override.
 
 ### `jev lint`
@@ -182,7 +183,7 @@ jev lint questions.yaml
 jev lint prompts/*.yaml                 # several files; findings prefixed with the file name
 jev lint --json questions.yaml          # machine-readable findings
 jev lint --strict questions.yaml        # warnings fail CI (alias: --deny-warnings)
-jev lint --quiet questions.yaml         # rule ids only, no help blocks
+jev lint --quiet questions.yaml         # findings without help blocks
 ```
 
 Exit codes follow a documented contract, for use in scripts and CI:
@@ -194,10 +195,10 @@ Exit codes follow a documented contract, for use in scripts and CI:
 `--json` prints machine-readable findings (rule, severity, message, path,
 help), compact when piped, with `--pretty`/`--compact` to override. Text mode
 prints findings to stdout so piping to `jq`
-stays safe. `--quiet` drops the help blocks and prints rule ids only, roughly
-cutting text output in half; useful when an agent or script consumes the ids.
+stays safe. `--quiet` drops the help blocks, roughly cutting text output in
+half; useful when an agent or script consumes the findings.
 Shell completions and a man page are behind the hidden `completions`
-subcommand, generated at build time alongside the binary.
+subcommand, rendered by `jev completions`.
 
 ### `jev auth`
 
@@ -240,7 +241,7 @@ logged too. `config set log <path-or-1>` makes a bare `--log` use it.
 
 ## Writing questions
 
-**YAML or JSON, anywhere a question set is accepted**, by file or on stdin. Ready-made examples are in [`examples/`](examples/), including a clean `severity.yaml` and a file that fails every lint rule (`bad-questions.yaml`). The
+**YAML or JSON, anywhere a question set is accepted**, by file or on stdin. Ready-made examples are in [`examples/`](examples/), including a clean `severity.yaml` and a file that trips the warning rules (`bad-questions.yaml`). The
 format is detected automatically, with no flag: JSON is tried first, because
 every JSON document is also valid YAML but the JSON parser gives better errors.
 
@@ -320,10 +321,16 @@ q:
 | `missing-criteria` | error | `choice`/`score` without criteria, which the API rejects |
 | `non-string-criteria`, `non-string-level` | error | A non-string criteria value, for requests built in code; the CLI coerces these |
 | `empty-instructions` | error | A question with nothing to judge |
+| `no-questions` | error | A request with no questions |
+| `empty-state` | error | An empty `state` |
+| `noul-criteria-shape` | error | `noul` criteria that aren't a `true`/`false` object |
+| `empty-level` | error | An empty `score` level description |
 | `context-overflow` | error | A payload that cannot fit the 32k-token limit under any tokenization |
 | `degenerate-criteria` | warning | Criteria that restate the label |
 | `single-option` | warning | A `choice` with one option |
 | `single-level` | warning | A `score` with one level |
+| `too-many-levels` | warning | A `score` with more than the documented 10 levels |
+| `noul-criteria-incomplete` | warning | `noul` criteria missing the `true` or `false` case |
 | `numeric-level` | warning | Levels described as bare numerals |
 | `conditional-question` | warning | "if applicable" phrasing, which returns ~0.5 regardless |
 | `compound-question` | warning | A `noul` weighing two properties at once |
@@ -336,7 +343,7 @@ but probably not what you meant.
 
 ## Performance
 
-See [Why this exists](#3-fast-where-speed-is-actually-available) for the
+See [Why this exists](#why-this-exists) for the
 numbers. The short version: the network is ~273 ms and everything local is
 under 0.1% of that, so only `lint`, which makes no call, is meaningfully fast.
 
