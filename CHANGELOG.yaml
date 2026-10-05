@@ -1,6 +1,9 @@
 project: jevkit
 versions:
-    unreleased: {}
+    unreleased:
+        internal:
+            changed:
+                - Dependency audit (cargo-deny) runs only on pull requests; the weekly scheduled run is removed.
     0.4.2:
         date: 2026-10-02
         fixed:
